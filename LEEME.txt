@@ -1,0 +1,17 @@
+GRP Launcher
+============
+
+Para jugar Ghost Recon Phantoms en nuestro servidor.
+
+1. Necesitas tener el juego instalado (el launcher no lo incluye). Si lo instalaste con el launcher de
+   Phoenix, este programa lo encuentra solo.
+2. Descomprime esta carpeta donde quieras y abre GRPLauncher.exe.
+   Si Windows muestra "Windows protegió su PC", pulsa "Más información" y luego "Ejecutar de todas formas".
+3. La primera vez: marca "Crear cuenta nueva", elige tu nickname (3 a 16 letras, números, - o _), una
+   contraseña de 6 caracteres o más y escribe el código de invitación que te pasaron.
+4. Las siguientes veces: nickname, contraseña y JUGAR.
+
+Si el juego no está en la carpeta habitual, usa "Buscar" y elige GhostReconPhantoms.exe.
+
+El launcher no modifica ningún archivo del juego. Guarda tu nickname y la carpeta del juego (nunca la
+contraseña) en %APPDATA%\GRPLauncher, junto con un registro (launcher.log) útil si algo falla.
