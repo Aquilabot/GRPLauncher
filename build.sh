@@ -14,6 +14,6 @@ printf '%s %s\n' "$version" "$(sha256sum dist/GRPLauncher.exe | cut -d' ' -f1)" 
 ( cd dist && rm -f GRPLauncher.zip && zip -q GRPLauncher.zip GRPLauncher.exe launcher.ini LEEME.txt )
 ls -la dist
 if [ "${1:-}" = publish ]; then
-  rsync -a dist/GRPLauncher.exe dist/version.txt "${GRP_HOST:-grp-server}:grp/launcher/"
+  rsync -a dist/GRPLauncher.exe dist/version.txt dist/GRPLauncher.zip "${GRP_HOST:-grp-server}:grp/launcher/"
   echo "published launcher $version"
 fi

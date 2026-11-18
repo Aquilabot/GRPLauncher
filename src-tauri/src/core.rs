@@ -18,6 +18,11 @@ pub struct Config {
     pub port: u16,            // UDP, lobby
     pub access_key: String,
     pub language: String,
+    // Linux only: the Wine prefix the game runs in, the Proton umu-run uses, and a folder with an existing copy
+    // of the game to take identical files from (on Windows that is Phoenix's install folder).
+    pub prefix: String,
+    pub proton: String,
+    pub phoenix_dir: String,
 }
 
 pub fn read_pairs(file: &Path) -> HashMap<String, String> {
@@ -51,6 +56,9 @@ pub fn config() -> &'static Config {
             port: get("port", "21031").parse().unwrap_or(21031),
             access_key: get("accesskey", "8dtRv2oj"),
             language: get("language", "english"),
+            prefix: get("prefix", ""),
+            proton: get("proton", "GE-Proton"),
+            phoenix_dir: get("phoenixdir", ""),
         }
     })
 }
@@ -59,17 +67,38 @@ fn env_dir(var: &str) -> PathBuf {
     std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir())
 }
 
+#[cfg(not(windows))]
+fn home() -> PathBuf {
+    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(std::env::temp_dir)
+}
+
+/// Settings and log. Windows: %APPDATA%\GRPLauncher. Linux: ~/.config/GRPLauncher.
 pub fn data_dir() -> PathBuf {
-    env_dir("APPDATA").join("GRPLauncher")
+    #[cfg(windows)]
+    return env_dir("APPDATA").join("GRPLauncher");
+    #[cfg(not(windows))]
+    return std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".config")).join("GRPLauncher");
+}
+
+#[cfg(not(windows))]
+fn share_dir() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".local").join("share")).join("GRPLauncher")
 }
 
 /// Where the launcher installs the game.
 pub fn default_game_dir() -> PathBuf {
-    env_dir("LOCALAPPDATA").join("GRP").join("Ghost Recon Phantoms")
+    #[cfg(windows)]
+    return env_dir("LOCALAPPDATA").join("GRP").join("Ghost Recon Phantoms");
+    #[cfg(not(windows))]
+    return share_dir().join("Ghost Recon Phantoms");
 }
 
-/// Where Phoenix's launcher left its copy: identical files are copied from there instead of downloaded. Never written to.
+/// An existing copy of the game (Phoenix's install on Windows; launcher.ini "phoenixdir" on Linux): identical files
+/// are copied from there instead of downloaded. Never written to.
 fn phoenix_game_dir() -> PathBuf {
+    if !config().phoenix_dir.is_empty() {
+        return PathBuf::from(&config().phoenix_dir);
+    }
     env_dir("LOCALAPPDATA").join("Phoenix Network").join("Ghost Recon Phantoms")
 }
 
@@ -216,6 +245,9 @@ fn download(url: &str, file: &Path, size: u64, sha: &str, progress: &mut dyn FnM
 /// Replaces this program when the server has a newer one, and starts it again. /launcher/version.txt holds
 /// "<number> <sha256 of GRPLauncher.exe>". Returns true when the new one was started (the caller exits).
 pub fn self_update(args: &[String]) -> bool {
+    if cfg!(not(windows)) {
+        return false; // the server publishes the Windows program; a Linux build is updated by hand
+    }
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(_) => return false,
@@ -448,16 +480,21 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     if o.sync && a.len() >= 4 {
         sync_game(a[3], game_dir, progress)?;
     }
-    let exe = game_dir.join(GAME_EXE);
-    if !exe.is_file() {
-        return Err(format!("No se encontró el juego en:\n{}", exe.display()));
+    if !game_dir.join(GAME_EXE).is_file() {
+        return Err(format!("No se encontró el juego en:\n{}", game_dir.join(GAME_EXE).display()));
     }
     set_resolution(game_dir, o);
-    crate::pipe::start(format!("{}.{}", a[1], a[2]));
+    run_game(game_dir, &format!("{}.{}", a[1], a[2]), progress, playing)
+}
+
+/// Runs the game with the session already made ("<name>.<token>") and waits for it to exit.
+#[cfg(windows)]
+pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
+    crate::pipe::start(session.to_string());
     std::thread::sleep(Duration::from_millis(500));
     progress("Abriendo el juego...", -1.0);
     let c = config();
-    let mut child = std::process::Command::new(&exe)
+    let mut child = std::process::Command::new(game_dir.join(GAME_EXE))
         .current_dir(game_dir)
         .arg("/ForceDefaultSandbox=true")
         .arg(format!("/Sandbox={}", c.server))
@@ -474,5 +511,47 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     playing();
     let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     log(&format!("game exited, code {}", code));
+    Ok(())
+}
+
+/// Linux: the game is a Windows program and talks to its launcher over a Windows pipe, so the last step runs
+/// inside Wine: umu-run starts the Windows build of this launcher with the session ("--session"), and that one
+/// answers the pipe and starts the game. The Windows build is fetched from the server next to this program.
+#[cfg(not(windows))]
+pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
+    progress("Preparando Proton...", -1.0);
+    let helper = share_dir().join("GRPLauncher.exe");
+    let _ = std::fs::create_dir_all(share_dir());
+    let published = get_text(&format!("{}/launcher/version.txt", base_url()), 10).unwrap_or_default();
+    let want = published.split_whitespace().nth(1).unwrap_or("").to_lowercase();
+    if !helper.is_file() || (!want.is_empty() && sha256_file(&helper).map(|h| h != want).unwrap_or(true)) {
+        let resp = ureq::get(&format!("{}/launcher/GRPLauncher.exe", base_url())).timeout(Duration::from_secs(120)).call().map_err(|e| format!("No se pudo descargar el ayudante de Windows: {}", e))?;
+        let mut f = std::fs::File::create(&helper).map_err(|e| e.to_string())?;
+        std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| e.to_string())?;
+    }
+    let ini = exe_dir().join("launcher.ini");
+    if ini.is_file() {
+        let _ = std::fs::copy(&ini, share_dir().join("launcher.ini")); // the helper reads the same server settings
+    }
+    let c = config();
+    let prefix = if c.prefix.is_empty() { share_dir().join("prefix") } else { PathBuf::from(&c.prefix) };
+    let win = |p: &Path| format!("Z:{}", p.to_string_lossy().replace('/', "\\"));
+    progress("Abriendo el juego...", -1.0);
+    let mut child = std::process::Command::new("umu-run")
+        .env("WINEPREFIX", &prefix)
+        .env("GAMEID", "umu-default")
+        .env("PROTONPATH", &c.proton)
+        .arg(&helper)
+        .arg("--session")
+        .arg(session)
+        .arg("--gamedir")
+        .arg(win(game_dir))
+        .spawn()
+        .map_err(|e| format!("No se pudo ejecutar umu-run (¿está instalado?): {}", e))?;
+    log(&format!("umu-run started, pid {}, prefix {}", child.id(), prefix.display()));
+    progress("Jugando. Esta ventana vuelve cuando cierres el juego.", -1.0);
+    playing();
+    let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+    log(&format!("umu-run exited, code {}", code));
     Ok(())
 }

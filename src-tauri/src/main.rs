@@ -4,6 +4,7 @@
 //
 //   GRPLauncher.exe                                   the window
 //   GRPLauncher.exe --user N --password P [--invite C] [--gamedir <folder>] [--nosync]   no window (tests)
+//   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
 //
 // Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language.
 // What the player chose last (never the password): %APPDATA%\GRPLauncher\settings.txt; log: launcher.log there.
@@ -113,6 +114,15 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     core::log(&format!("launcher {} started, server {}", core::VERSION, core::config().server));
     if core::self_update(&args) {
+        return;
+    }
+    // The last step alone, with the session made by another copy of the launcher (what the Linux build runs inside Wine).
+    if let Some(session) = arg(&args, "--session") {
+        let dir = arg(&args, "--gamedir").map(std::path::PathBuf::from).unwrap_or_else(core::default_game_dir);
+        if let Err(e) = core::run_game(&dir, &session, &|_, _| {}, &|| {}) {
+            core::log(&format!("failed: {}", e));
+            std::process::exit(1);
+        }
         return;
     }
     if let Some(name) = arg(&args, "--user") {

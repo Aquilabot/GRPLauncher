@@ -24,4 +24,10 @@ Build: `./build.sh` (cross-compiles from Linux with cargo-xwin); `./build.sh pub
 installed launcher replaces itself on its next start. Raise `VERSION` in `core.rs` for each release.
 The window needs the WebView2 runtime (part of Windows 11 and of most Windows 10).
 
+Linux: `cargo build --release` in `src-tauri/` gives a native launcher (needs webkit2gtk-4.1 and `umu-run`). It signs in
+and prepares the game folder itself, then runs the game inside Wine through `umu-run`, with the Windows build
+(fetched from the server) as the helper that answers the game's pipe (`--session`). `launcher.ini` takes three
+more keys there: `prefix` (Wine prefix), `proton` (PROTONPATH) and `phoenixdir` (an existing copy of the game to
+take identical files from). Settings and log go to `~/.config/GRPLauncher`, the game to `~/.local/share/GRPLauncher`.
+
 `legacy/` holds the first launcher (WinForms, .NET), kept for reference.
