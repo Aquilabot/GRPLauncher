@@ -1,0 +1,31 @@
+[package]
+name = "grp-launcher"
+version = "0.3.0"
+edition = "2021"
+
+[[bin]]
+name = "GRPLauncher"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", default-features = false }
+sha2 = "0.10"
+sha1 = "0.10"
+pbkdf2 = "0.12"
+hex = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_IO"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1

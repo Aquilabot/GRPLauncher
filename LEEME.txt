@@ -1,17 +1,40 @@
 GRP Launcher
 ============
 
-Para jugar Ghost Recon Phantoms en nuestro servidor.
+Para jugar Ghost Recon Phantoms en nuestro servidor. El launcher descarga el juego, lo mantiene al día y
+se actualiza solo.
 
-1. Necesitas tener el juego instalado (el launcher no lo incluye). Si lo instalaste con el launcher de
-   Phoenix, este programa lo encuentra solo.
-2. Descomprime esta carpeta donde quieras y abre GRPLauncher.exe.
-   Si Windows muestra "Windows protegió su PC", pulsa "Más información" y luego "Ejecutar de todas formas".
-3. La primera vez: marca "Crear cuenta nueva", elige tu nickname (3 a 16 letras, números, - o _), una
-   contraseña de 6 caracteres o más y escribe el código de invitación que te pasaron.
-4. Las siguientes veces: nickname, contraseña y JUGAR.
+PRIMERA VEZ
+1. Descomprime esta carpeta donde quieras (por ejemplo en Documentos) y abre GRPLauncher.exe.
+2. Marca "Crear cuenta nueva", elige tu nickname (3 a 16 letras, números, - o _), una contraseña de 6
+   caracteres o más y escribe el código de invitación que te pasaron.
+3. Pulsa CREAR CUENTA Y JUGAR. La primera vez descarga el juego (unos 4 GB). Si ya lo tenías instalado
+   con el launcher de Phoenix, copia los archivos de ahí y tarda mucho menos.
 
-Si el juego no está en la carpeta habitual, usa "Buscar" y elige GhostReconPhantoms.exe.
+LAS SIGUIENTES VECES
+Nickname, contraseña y JUGAR.
 
-El launcher no modifica ningún archivo del juego. Guarda tu nickname y la carpeta del juego (nunca la
-contraseña) en %APPDATA%\GRPLauncher, junto con un registro (launcher.log) útil si algo falla.
+SI WINDOWS O EL ANTIVIRUS LO BLOQUEAN
+El programa no está firmado todavía, así que Windows desconfía de él la primera vez.
+- "Windows protegió su PC" (pantalla azul de SmartScreen): pulsa "Más información" y luego
+  "Ejecutar de todas formas".
+- Si Windows Defender lo borra o lo pone en cuarentena: abre Seguridad de Windows > Protección antivirus
+  y contra amenazas > Administrar la configuración > Exclusiones > Agregar o quitar exclusiones >
+  Agregar una exclusión > Carpeta, y elige la carpeta donde descomprimiste el launcher. Después vuelve a
+  descomprimir el zip ahí.
+- Con otro antivirus (Avast, Kaspersky, etc.): busca en su configuración "Exclusiones" o "Excepciones" y
+  añade esa misma carpeta.
+No hace falta desactivar el antivirus entero; basta con la exclusión de esa carpeta.
+
+SI NO ABRE NINGUNA VENTANA
+El launcher usa "Microsoft Edge WebView2", que Windows 11 trae de serie y casi todos los Windows 10
+también. Si no lo tienes, instálalo desde la página de Microsoft (busca "WebView2 Runtime", el
+"Evergreen Bootstrapper") y vuelve a abrir el launcher.
+
+OPCIONES
+- Carpeta del juego: dónde se instala. Por defecto, %LOCALAPPDATA%\GRP\Ghost Recon Phantoms.
+- Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en
+  ventana.
+
+El launcher guarda tu nickname y tus opciones (nunca la contraseña) en %APPDATA%\GRPLauncher, junto con
+un registro (launcher.log) que sirve si algo falla: mándalo si te piden ayuda.

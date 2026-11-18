@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRP Launcher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="mark">GRP</div>
+    <div>
+      <h1>Ghost Recon Phantoms</h1>
+      <p class="sub" id="server"></p>
+    </div>
+  </header>
+
+  <form id="form" autocomplete="off">
+    <label for="name">Nickname</label>
+    <input id="name" maxlength="16" spellcheck="false">
+
+    <label for="password">Contraseña</label>
+    <input id="password" type="password">
+
+    <label class="check"><input id="create" type="checkbox"> Crear cuenta nueva</label>
+    <div id="inviteRow" hidden>
+      <label for="invite">Código de invitación</label>
+      <input id="invite" spellcheck="false" placeholder="GRP-XXXX-XXXX">
+    </div>
+
+    <details>
+      <summary>Opciones</summary>
+      <label for="gamedir">Carpeta del juego <span class="hint">(se descarga ahí si falta, unos 4 GB)</span></label>
+      <div class="row">
+        <input id="gamedir" spellcheck="false">
+        <button type="button" id="browse" class="ghost">Buscar</button>
+      </div>
+      <label for="resolution">Resolución</label>
+      <div class="row">
+        <select id="resolution"></select>
+        <label class="check tight"><input id="windowed" type="checkbox"> En ventana</label>
+      </div>
+    </details>
+
+    <button id="play" class="primary">JUGAR</button>
+  </form>
+
+  <footer>
+    <div id="bar" hidden><div id="fill"></div></div>
+    <p id="status"></p>
+    <p id="version"></p>
+  </footer>
+</main>
+<script src="main.js"></script>
+</body>
+</html>
