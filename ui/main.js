@@ -1,5 +1,5 @@
 // The launcher window. The work happens in the Rust side (commands get_state, get_notes, mark_notes_seen, play,
-// pick_folder); this file
+// pick_folder, reset_password); this file
 // collects what the player typed and shows the progress events.
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
@@ -30,12 +30,48 @@ function setStatus(text, fraction) {
 
 function setBusy(busy) {
   $('play').disabled = busy;
-  for (const id of ['name', 'password', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed']) $(id).disabled = busy;
+  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed']) $(id).disabled = busy;
 }
 
 $('create').addEventListener('change', () => {
   $('inviteRow').hidden = !$('create').checked;
   $('play').textContent = $('create').checked ? 'CREAR CUENTA Y JUGAR' : 'JUGAR';
+});
+
+// "¿Olvidaste tu contraseña?": a second form in place of the first, for the code an admin hands out.
+function showReset(on) {
+  $('form').hidden = on;
+  $('resetForm').hidden = !on;
+  if (on) {
+    $('resetName').value = $('name').value.trim();
+    for (const id of ['resetCode', 'resetPassword', 'resetPassword2']) $(id).value = '';
+    ($('resetName').value ? $('resetCode') : $('resetName')).focus();
+  }
+  setStatus('');
+}
+$('forgot').addEventListener('click', () => showReset(true));
+$('resetBack').addEventListener('click', () => showReset(false));
+
+$('resetForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const name = $('resetName').value.trim(), code = $('resetCode').value.trim(), password = $('resetPassword').value;
+  if (!name || !code || !password) return setStatus('Escribe tu nickname, el código y la contraseña nueva.');
+  if (password.length < 6) return setStatus('La contraseña debe tener al menos 6 caracteres.');
+  if (password !== $('resetPassword2').value) return setStatus('Las dos contraseñas no coinciden.');
+  $('resetGo').disabled = true;
+  setStatus('Cambiando la contraseña...');
+  try {
+    await invoke('reset_password', { name, code, password });
+    showReset(false);
+    $('name').value = name;
+    $('password').value = '';
+    $('password').focus();
+    setStatus('Contraseña cambiada. Ya puedes entrar con la nueva.');
+  } catch (e) {
+    setStatus(String(e));
+  } finally {
+    $('resetGo').disabled = false;
+  }
 });
 
 $('browse').addEventListener('click', async () => {

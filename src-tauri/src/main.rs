@@ -4,6 +4,7 @@
 //
 //   GRPLauncher.exe                                   the window
 //   GRPLauncher.exe --user N --password P [--invite C] [--gamedir <folder>] [--nosync]   no window (tests)
+//   GRPLauncher.exe --user N --password P --reset <code>   sets the new password P with an admin's code, no window (tests)
 //   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
 //
 // Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language.
@@ -99,6 +100,18 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
     });
 }
 
+// The "¿Olvidaste tu contraseña?" form. Off the window's thread: it waits for the network.
+#[tauri::command(async)]
+fn reset_password(name: String, code: String, password: String) -> Result<(), String> {
+    let r = core::reset_password(&name, &code, &password);
+    core::log(&format!("password reset {}: {}", name, r));
+    if r == "OK" {
+        Ok(())
+    } else {
+        Err(core::explain(&r))
+    }
+}
+
 #[derive(Serialize)]
 struct Notes {
     notes: Vec<notes::Note>,
@@ -150,6 +163,11 @@ fn main() {
     }
     if let Some(name) = arg(&args, "--user") {
         let pw = arg(&args, "--password").unwrap_or_default();
+        if let Some(code) = arg(&args, "--reset") {
+            let r = core::reset_password(&name, &code, &pw);
+            core::log(&format!("password reset {}: {}", name, r));
+            std::process::exit(if r == "OK" { 0 } else { 2 });
+        }
         if let Some(invite) = arg(&args, "--invite") {
             let r = core::register(&invite, &name, &pw);
             core::log(&format!("register {}: {}", name, r));
@@ -182,7 +200,7 @@ fn main() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, get_notes, mark_notes_seen, play, pick_folder])
+        .invoke_handler(tauri::generate_handler![get_state, get_notes, mark_notes_seen, play, pick_folder, reset_password])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");
 }

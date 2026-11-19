@@ -34,6 +34,11 @@ summary { color: var(--muted); font-size: 12px; cursor: pointer; text-transform:
 button { font: inherit; cursor: pointer; border-radius: 2px; }
 .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); padding: 9px 14px; }
 .ghost:hover { border-color: var(--accent); }
+.link { align-self: flex-start; background: none; border: 0; padding: 0; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.link:hover, .link:focus-visible { color: var(--accent); text-decoration: underline; outline: none; }
+.link:disabled { opacity: .5; cursor: default; text-decoration: none; }
+.intro { margin: 0 0 4px; color: var(--muted); font-size: 12px; }
+form[hidden] { display: none; }
 .primary {
   margin-top: auto; background: var(--go); color: #fff; border: 0; padding: 13px;
   font-weight: 700; letter-spacing: 2px; font-size: 15px;

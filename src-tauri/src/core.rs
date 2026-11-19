@@ -186,8 +186,43 @@ fn login(name: &str, password: &str) -> String {
     post("/login", &format!("name={}&secret={}&v={}", escape(name), secret(name, password), VERSION))
 }
 
+/// A new password with the single-use code an admin gave the player: "OK", "ERR code" (wrong, used or expired)...
+pub fn reset_password(name: &str, code: &str, password: &str) -> String {
+    post("/reset", &format!("name={}&code={}&secret={}", escape(name), escape(code), secret(name, password)))
+}
+
+/// "ERR banned <until, unix seconds, 0 for good> <reason>" in words: how long is left, and why.
+fn banned(rest: &str) -> String {
+    let (until, reason) = rest.split_once(' ').unwrap_or((rest, ""));
+    let until: u64 = until.parse().unwrap_or(0);
+    let when = if until == 0 {
+        "de forma permanente.".to_string()
+    } else {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        format!("y volverá a estar activa en {}.", left(until.saturating_sub(now)))
+    };
+    let reason = reason.trim();
+    format!("Tu cuenta está suspendida {}{}", when, if reason.is_empty() { String::new() } else { format!("\nMotivo: {}", reason) })
+}
+
+/// A time span in words, the two largest units: "6 días y 23 horas", "5 horas y 1 minuto", "12 minutos".
+fn left(seconds: u64) -> String {
+    let unit = |n: u64, one: &str, many: &str| format!("{} {}", n, if n == 1 { one } else { many });
+    let (d, h, m) = (seconds / 86400, seconds % 86400 / 3600, (seconds % 3600).div_ceil(60).max(1));
+    let parts = if d > 0 {
+        vec![unit(d, "día", "días"), unit(h, "hora", "horas")]
+    } else if h > 0 {
+        vec![unit(h, "hora", "horas"), unit(m.min(59), "minuto", "minutos")]
+    } else {
+        vec![unit(m, "minuto", "minutos")]
+    };
+    parts.into_iter().filter(|p| !p.starts_with("0 ")).collect::<Vec<_>>().join(" y ")
+}
+
 pub fn explain(answer: &str) -> String {
     match answer {
+        "ERR code" => "El código no es válido, ya se usó o caducó. Pide uno nuevo a un administrador.".into(),
+        a if a.starts_with("ERR banned ") => banned(&a[11..]),
         "ERR invite" => "El código de invitación no es válido o ya se usó.".into(),
         "ERR name" => "El nickname debe tener de 3 a 16 caracteres: letras, números, guion y guion bajo.".into(),
         "ERR taken" => "Ese nickname ya está en uso.".into(),

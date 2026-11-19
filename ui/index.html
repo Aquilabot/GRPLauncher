@@ -22,6 +22,7 @@
 
     <label for="password">Contraseña</label>
     <input id="password" type="password">
+    <button type="button" id="forgot" class="link">¿Olvidaste tu contraseña?</button>
 
     <label class="check"><input id="create" type="checkbox"> Crear cuenta nueva</label>
     <div id="inviteRow" hidden>
@@ -49,6 +50,20 @@
     </section>
 
     <button id="play" class="primary">JUGAR</button>
+  </form>
+
+  <form id="resetForm" autocomplete="off" hidden>
+    <p class="intro">Pide un código a un administrador en Discord. Sirve una sola vez y caduca en 24 horas.</p>
+    <label for="resetName">Nickname</label>
+    <input id="resetName" maxlength="16" spellcheck="false">
+    <label for="resetCode">Código</label>
+    <input id="resetCode" spellcheck="false" placeholder="XXXXX-XXXXX">
+    <label for="resetPassword">Contraseña nueva</label>
+    <input id="resetPassword" type="password">
+    <label for="resetPassword2">Repite la contraseña nueva</label>
+    <input id="resetPassword2" type="password">
+    <button type="button" id="resetBack" class="link">Volver</button>
+    <button id="resetGo" class="primary">CAMBIAR CONTRASEÑA</button>
   </form>
 
   <footer>
