@@ -624,7 +624,40 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     log(&format!("umu-run started, pid {}, prefix {}", child.id(), prefix.display()));
     progress("Jugando. Esta ventana vuelve cuando cierres el juego.", -1.0);
     playing();
-    let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+    let running = std::sync::atomic::AtomicBool::new(true);
+    let code = std::thread::scope(|s| {
+        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+            s.spawn(|| fullscreen_on_hyprland(&running));
+        }
+        let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+        running.store(false, std::sync::atomic::Ordering::Relaxed);
+        code
+    });
     log(&format!("umu-run exited, code {}", code));
     Ok(())
+}
+
+/// Hyprland tiles the game's window under its bar. Each new game window is made fullscreen there once, so the player
+/// can still take it out of fullscreen. The game itself stays windowed (see set_resolution).
+#[cfg(not(windows))]
+fn fullscreen_on_hyprland(running: &std::sync::atomic::AtomicBool) {
+    let hyprctl = |args: &[&str]| std::process::Command::new("hyprctl").args(args).output().ok();
+    let mut seen = std::collections::HashSet::new();
+    while running.load(std::sync::atomic::Ordering::Relaxed) {
+        std::thread::sleep(Duration::from_secs(1));
+        let Some(out) = hyprctl(&["clients", "-j"]) else { return };
+        let clients: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout).unwrap_or_default();
+        for c in clients.iter().filter(|c| c["title"] == "Ghost Recon Phantoms" && c["xwayland"] == true) {
+            let Some(address) = c["address"].as_str() else { continue };
+            if !seen.insert(address.to_string()) || c["fullscreen"] != 0 {
+                continue;
+            }
+            // Hyprland with the Lua config takes Lua dispatchers; older versions the classic form
+            let lua = format!("hl.dsp.window.fullscreen({{ mode = \"fullscreen\", action = \"set\", window = \"address:{}\" }})", address);
+            let classic = format!("dispatch focuswindow address:{}; dispatch fullscreenstate 2 2", address);
+            let ok = |o: Option<std::process::Output>| o.map(|o| o.status.success()).unwrap_or(false);
+            let done = ok(hyprctl(&["dispatch", &lua])) || ok(hyprctl(&["--batch", &classic]));
+            log(&format!("hyprland fullscreen {}: {}", address, if done { "ok" } else { "failed" }));
+        }
+    }
 }
