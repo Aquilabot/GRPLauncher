@@ -32,6 +32,32 @@ and prepares the game folder itself, then runs the game inside Wine through `umu
 more keys there: `prefix` (Wine prefix), `proton` (PROTONPATH) and `phoenixdir` (an existing copy of the game to
 take identical files from). Settings and log go to `~/.config/GRPLauncher`, the game to `~/.local/share/GRPLauncher`.
 
+## Release notes
+
+The main window shows what changed on the server, in the launcher and in the game, between Opciones and JUGAR ("Novedades").
+They come from `<base>/launcher/notes.json` (on the community server `https://grp.limacashout.pro/launcher/notes.json`,
+on the VPS `/srv/grp/launcher/notes.json`). `/launcher/` is public, like `version.txt`, so the notes show before
+signing in. One JSON list, newest first:
+
+```json
+[
+  { "id": 2, "date": "2026-11-19", "tag": "servidor", "title": "Partidas más estables",
+    "items": ["Ya no se cae la partida cuando un jugador sale.", "Reaparición de 10 s."] },
+  { "id": 1, "date": "2026-11-18", "tag": "launcher", "title": "Conexión cifrada", "items": ["..."] }
+]
+```
+
+- `id`: a whole number that grows with each note; the launcher shows the highest first.
+- `tag`: `servidor`, `launcher` or `juego` (anything else: no tag shown). `date`: `YYYY-MM-DD` (anything else: none shown).
+- Limits (`src-tauri/src/notes.rs`): file up to 64 KB, the 50 highest ids, title up to 120 characters, up to 12 items
+  of up to 400. A longer text is cut; an entry without a numeric `id` or a `title` is skipped; a file that is
+  missing, too big or not a list shows no panel, and the window looks as it did before. Everything is shown as text.
+- The highest id the player has seen is `notesseen` in `settings.txt`. Newer entries get a mark and the heading a
+  count; scrolling or clicking the list, or pressing JUGAR, counts as seen (the marks stay until the window closes).
+
+To add one: `research/tools/deploy/notes-add.sh <tag> "<title>" "<item>" ...` in the GRP repository prints the new file
+(next id, today's date); with `--publish` it uploads it.
+
 `legacy/` holds the first launcher (WinForms, .NET), kept for reference.
 
 ## What it does

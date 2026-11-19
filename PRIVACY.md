@@ -10,11 +10,13 @@ only when you use it:
 - **Keeping itself and the game up to date**: it downloads `version.txt` and, when there is a newer launcher, the
   new program; it downloads the list of game files and the files that are missing or different. Those requests
   carry nothing but the file names and the access key the server returned at sign-in.
+- **Showing the server's news** (since version 5): when the window opens and when the game closes it downloads
+  `notes.json`, a public list of changes. The request carries nothing about you.
 
 As with any connection, the server sees your IP address; it keeps it in its access log.
 
 What the launcher keeps on your computer: the nickname (never the password), the folder and the resolution you
-chose, a log of its own actions, and the game files. On Windows they are next to the program; on Linux in
+chose, the number of the last news entry you saw, a log of its own actions, and the game files. On Windows they are next to the program; on Linux in
 `~/.config/GRPLauncher` and `~/.local/share/GRPLauncher`.
 
 It has no telemetry, analytics, advertising or crash reporting, and it contacts no other system. This program
