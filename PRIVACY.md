@@ -21,7 +21,8 @@ It has no telemetry, analytics, advertising or crash reporting, and it contacts 
 will not transfer any information to other networked systems unless specifically requested by the user or the
 person installing or operating it.
 
-The connection to the server is plain HTTP today: someone on the network path could read what is listed above.
+The connection to the community server is encrypted (HTTPS) since version 4 of the launcher. The game itself
+talks to the game server over its own protocol (UDP), as the original game did.
 
 Changes it makes to your system: none outside its own folder and the game folder you choose. To remove it, delete
 those folders; there is no installer and nothing is written to the registry.

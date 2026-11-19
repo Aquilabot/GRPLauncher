@@ -17,7 +17,9 @@ plain HTML/JS in `ui/`, the work is Rust in `src-tauri/src/`.
   nginx on TCP 21080 fronts the account service and serves `/launcher/` and `/files/<key>/`.
 
 The password never leaves the machine: what is sent is PBKDF2-HMAC-SHA1(password, "grp2016:" + lowercase name),
-50000 rounds, 32 bytes, hex. The connection is plain HTTP, so that value can still be captured and replayed.
+50000 rounds, 32 bytes, hex. Since version 4 the connection to the community server is HTTPS
+(`https://grp.limacashout.pro`, certificates checked against the system's store); `accounturl` in `launcher.ini`
+points it somewhere else, and a server on your own machine is still reached in plain HTTP.
 The program is not code-signed: SmartScreen and antivirus warn on first run (`LEEME.txt` tells players what to do).
 
 Build: `./build.sh` (cross-compiles from Linux with cargo-xwin); `./build.sh publish` also uploads it, and every

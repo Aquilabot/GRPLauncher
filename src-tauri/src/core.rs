@@ -8,13 +8,14 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
     pub server: String,
     pub account_host: String, // account service and downloads; empty = the same as server
     pub account_port: u16,    // TCP
+    pub account_url: String,  // full address of the account service and downloads; empty = see base_url
     pub port: u16,            // UDP, lobby
     pub access_key: String,
     pub language: String,
@@ -53,6 +54,7 @@ pub fn config() -> &'static Config {
             server: get("server", "56.127.0.17"),
             account_host: get("accounthost", ""),
             account_port: get("accountport", "21080").parse().unwrap_or(21080),
+            account_url: get("accounturl", ""),
             port: get("port", "21031").parse().unwrap_or(21031),
             access_key: get("accesskey", "8dtRv2oj"),
             language: get("language", "english"),
@@ -102,8 +104,23 @@ fn phoenix_game_dir() -> PathBuf {
     env_dir("LOCALAPPDATA").join("Phoenix Network").join("Ghost Recon Phantoms")
 }
 
+/// The community server's own address and the encrypted address of its account service. Launchers up to version 3
+/// talked to it in plain HTTP on port 21080; a launcher.ini from those days has no "accounturl" and names the
+/// server by this address, and gets HTTPS from this version on.
+const HOME_SERVER: &str = "56.127.0.17";
+const HOME_ACCOUNT_URL: &str = "https://grp.limacashout.pro";
+
+/// Where sign-in, updates and game files come from: "accounturl" of launcher.ini when it is there (any http or
+/// https address, no trailing slash); the encrypted address for the community server; otherwise plain HTTP on
+/// accounthost (or server) and accountport, which is what a server on your own machine uses.
 fn base_url() -> String {
     let c = config();
+    if !c.account_url.is_empty() {
+        return c.account_url.trim_end_matches('/').to_string();
+    }
+    if c.account_host.is_empty() && (c.server == HOME_SERVER || c.server == "grp.limacashout.pro") {
+        return HOME_ACCOUNT_URL.to_string();
+    }
     format!("http://{}:{}", if c.account_host.is_empty() { &c.server } else { &c.account_host }, c.account_port)
 }
 
