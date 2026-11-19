@@ -1,4 +1,4 @@
-# Builds the Windows launcher from this repository. It runs only for a version tag pushed by a maintainer, or when
+# Builds the Windows launcher (GRPLauncher.exe) from this repository. It runs only for a version tag pushed by a maintainer, or when
 # a maintainer starts it by hand: never for pull requests, so code from a fork is not built or given secrets here.
 name: release
 on:
