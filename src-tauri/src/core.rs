@@ -82,6 +82,23 @@ pub fn data_dir() -> PathBuf {
     return std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".config")).join("GRPLauncher");
 }
 
+/// What the player chose last (never the password): settings.txt in data_dir, "key=value" lines.
+pub fn settings() -> HashMap<String, String> {
+    read_pairs(&data_dir().join("settings.txt"))
+}
+
+/// Sets some keys of settings.txt and keeps the others.
+pub fn save_settings(changes: &[(&str, String)]) {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _g = LOCK.lock();
+    let mut s: std::collections::BTreeMap<String, String> = settings().into_iter().collect();
+    for (k, v) in changes {
+        s.insert(k.to_string(), v.clone());
+    }
+    let _ = std::fs::create_dir_all(data_dir());
+    let _ = std::fs::write(data_dir().join("settings.txt"), s.iter().map(|(k, v)| format!("{}={}\n", k, v)).collect::<String>());
+}
+
 #[cfg(not(windows))]
 fn share_dir() -> PathBuf {
     std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".local").join("share")).join("GRPLauncher")
@@ -113,7 +130,7 @@ const HOME_ACCOUNT_URL: &str = "https://grp.limacashout.pro";
 /// Where sign-in, updates and game files come from: "accounturl" of launcher.ini when it is there (any http or
 /// https address, no trailing slash); the encrypted address for the community server; otherwise plain HTTP on
 /// accounthost (or server) and accountport, which is what a server on your own machine uses.
-fn base_url() -> String {
+pub fn base_url() -> String {
     let c = config();
     if !c.account_url.is_empty() {
         return c.account_url.trim_end_matches('/').to_string();

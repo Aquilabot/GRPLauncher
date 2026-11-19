@@ -7,10 +7,12 @@
 //   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
 //
 // Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language.
-// What the player chose last (never the password): %APPDATA%\GRPLauncher\settings.txt; log: launcher.log there.
+// What the player chose last (never the password) and the last release note seen: %APPDATA%\GRPLauncher\settings.txt;
+// log: launcher.log there.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod core;
+mod notes;
 mod pipe;
 
 use serde::{Deserialize, Serialize};
@@ -28,7 +30,7 @@ struct State {
 
 #[tauri::command]
 fn get_state() -> State {
-    let s = core::read_pairs(&core::data_dir().join("settings.txt"));
+    let s = core::settings();
     State {
         version: core::VERSION,
         name: s.get("name").cloned().unwrap_or_default(),
@@ -66,11 +68,12 @@ struct Done {
 #[tauri::command]
 fn play(app: tauri::AppHandle, args: PlayArgs) {
     std::thread::spawn(move || {
-        let _ = std::fs::create_dir_all(core::data_dir());
-        let _ = std::fs::write(
-            core::data_dir().join("settings.txt"),
-            format!("name={}\ngamedir={}\nresolution={}\nwindowed={}\n", args.name, args.gamedir, args.resolution, if args.windowed { 1 } else { 0 }),
-        );
+        core::save_settings(&[
+            ("name", args.name.clone()),
+            ("gamedir", args.gamedir.clone()),
+            ("resolution", args.resolution.clone()),
+            ("windowed", if args.windowed { "1" } else { "0" }.to_string()),
+        ]);
         let progress_app = app.clone();
         let progress = move |text: &str, fraction: f64| {
             let _ = progress_app.emit("status", Status { text: text.to_string(), fraction });
@@ -94,6 +97,26 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         }
         let _ = app.emit("done", Done { error });
     });
+}
+
+#[derive(Serialize)]
+struct Notes {
+    notes: Vec<notes::Note>,
+    seen: u32, // highest id the player has seen; newer ones are marked as new
+}
+
+// Off the window's thread: it waits for the network.
+#[tauri::command(async)]
+fn get_notes() -> Notes {
+    Notes { notes: notes::fetch(), seen: core::settings().get("notesseen").and_then(|v| v.parse().ok()).unwrap_or(0) }
+}
+
+#[tauri::command]
+fn mark_notes_seen(id: u32) {
+    let seen: u32 = core::settings().get("notesseen").and_then(|v| v.parse().ok()).unwrap_or(0);
+    if id > seen {
+        core::save_settings(&[("notesseen", id.to_string())]);
+    }
 }
 
 #[tauri::command]
@@ -159,7 +182,7 @@ fn main() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, play, pick_folder])
+        .invoke_handler(tauri::generate_handler![get_state, get_notes, mark_notes_seen, play, pick_folder])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");
 }
