@@ -42,6 +42,9 @@ are not part of this repository or of the program; they come from the server the
 
 Downloads: the [releases](https://git.limacashout.pro/aquilabot/GRPLauncher/releases) page.
 
+The repository lives at <https://git.limacashout.pro/aquilabot/GRPLauncher> and is mirrored at
+<https://github.com/Aquilabot/GRPLauncher>, where the release builds run.
+
 ## License
 
 [Mozilla Public License 2.0](LICENSE). The files you change stay under the MPL and their source must be available
@@ -55,8 +58,8 @@ by [SignPath Foundation](https://signpath.org/).
 - Only the launcher built from this repository is signed. The signed files are produced by the automated build
   in `.github/workflows/release.yml`, which runs for a version tag or when a maintainer starts it, never for a
   pull request; each release signing is approved by hand.
-- Team roles: **author, reviewer and approver**: [aquilabot](https://git.limacashout.pro/aquilabot), the
-  project's only maintainer. Everybody else contributes through pull requests, which the maintainer reviews
+- Team roles: **author, reviewer and approver**: [aquilabot](https://github.com/Aquilabot)
+  ([on the project's own server](https://git.limacashout.pro/aquilabot)), the project's only maintainer. Everybody else contributes through pull requests, which the maintainer reviews
   before merging ([CONTRIBUTING.md](CONTRIBUTING.md)).
 - Privacy: see the [privacy policy](PRIVACY.md). This program will not transfer any information to other
   networked systems unless specifically requested by the user or the person installing or operating it.
