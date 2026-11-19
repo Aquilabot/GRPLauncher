@@ -1,0 +1,25 @@
+# The same build on this Forgejo instance (cross-compiled from Linux, as build.sh does), for a version tag or by
+# hand. Never for pull requests. Needs a registered Actions runner; unsigned (SignPath only verifies builds made on
+# the systems it supports, see README, "Code signing policy").
+name: build
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+jobs:
+  windows:
+    runs-on: docker
+    container: rust:1-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends clang lld llvm zip
+          rustup target add x86_64-pc-windows-msvc
+          cargo install --locked cargo-xwin
+      - name: Build
+        run: cd src-tauri && cargo xwin build --release --locked --target x86_64-pc-windows-msvc
+      - uses: actions/upload-artifact@v3
+        with:
+          name: GRPLauncher-unsigned
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/GRPLauncher.exe

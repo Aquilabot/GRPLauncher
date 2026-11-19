@@ -2,6 +2,9 @@
 name = "grp-launcher"
 version = "0.3.0"
 edition = "2021"
+description = "Launcher for playing Ghost Recon Phantoms (2016 client) on a community server"
+license = "MPL-2.0"
+repository = "https://git.limacashout.pro/aquilabot/GRPLauncher"
 
 [[bin]]
 name = "GRPLauncher"

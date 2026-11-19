@@ -1,0 +1,41 @@
+# Builds the Windows launcher from this repository. It runs only for a version tag pushed by a maintainer, or when
+# a maintainer starts it by hand: never for pull requests, so code from a fork is not built or given secrets here.
+name: release
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        working-directory: src-tauri
+        run: cargo build --release --locked
+      - name: Package
+        shell: bash
+        run: |
+          mkdir dist
+          cp src-tauri/target/release/GRPLauncher.exe launcher.ini LEEME.txt LICENSE dist/
+          version="$(grep -oP 'pub const VERSION: u32 = \K[0-9]+' src-tauri/src/core.rs)"
+          printf '%s %s\n' "$version" "$(sha256sum dist/GRPLauncher.exe | cut -d' ' -f1)" > dist/version.txt
+      - uses: actions/upload-artifact@v4
+        id: unsigned
+        with:
+          name: GRPLauncher-unsigned
+          path: dist/
+      # Code signing (SignPath Foundation), enabled once the project is accepted: the signing request is made for
+      # the artifact built above from this commit, and each release is approved by hand in SignPath.
+      # - uses: signpath/github-action-submit-signing-request@v1
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      #     project-slug: GRPLauncher
+      #     signing-policy-slug: release-signing
+      #     github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+      #     wait-for-completion: true
+      #     output-artifact-directory: signed

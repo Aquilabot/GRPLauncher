@@ -1,0 +1,27 @@
+# Privacy policy
+
+GRPLauncher talks only to the game server written in `launcher.ini` next to the program (the key `server`), and
+only when you use it:
+
+- **Signing in or creating an account** (`POST /login`, `POST /register`): it sends the nickname you typed, a value
+  derived from your password (PBKDF2-HMAC-SHA1 of the password with the nickname, 50 000 rounds; the password
+  itself is never sent or stored), the launcher's version number and, when creating an account, the invitation
+  code. The server answers with a session token valid for 12 hours, which the launcher hands to the game.
+- **Keeping itself and the game up to date**: it downloads `version.txt` and, when there is a newer launcher, the
+  new program; it downloads the list of game files and the files that are missing or different. Those requests
+  carry nothing but the file names and the access key the server returned at sign-in.
+
+As with any connection, the server sees your IP address; it keeps it in its access log.
+
+What the launcher keeps on your computer: the nickname (never the password), the folder and the resolution you
+chose, a log of its own actions, and the game files. On Windows they are next to the program; on Linux in
+`~/.config/GRPLauncher` and `~/.local/share/GRPLauncher`.
+
+It has no telemetry, analytics, advertising or crash reporting, and it contacts no other system. This program
+will not transfer any information to other networked systems unless specifically requested by the user or the
+person installing or operating it.
+
+The connection to the server is plain HTTP today: someone on the network path could read what is listed above.
+
+Changes it makes to your system: none outside its own folder and the game folder you choose. To remove it, delete
+those folders; there is no installer and nothing is written to the registry.
