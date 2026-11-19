@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 5;
+pub const VERSION: u32 = 6;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -505,6 +505,9 @@ fn set_resolution(game_dir: &Path, o: &PlayOptions) {
         Ok(t) => t,
         Err(_) => return,
     };
+    // On Linux the game runs under Wine on XWayland, where exclusive fullscreen leaves the mouse off from what is drawn:
+    // a window the size of the screen looks the same and the clicks land where they should.
+    let o = &PlayOptions { windowed: o.windowed || cfg!(target_os = "linux"), ..*o };
     let mut seen = [false; 3];
     let mut lines: Vec<String> = text
         .lines()

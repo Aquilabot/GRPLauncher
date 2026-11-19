@@ -167,6 +167,7 @@ listen('done', (e) => {
   $('name').value = s.name;
   $('gamedir').value = s.gamedir;
   $('windowed').checked = s.windowed;
+  if (/Linux/.test(navigator.userAgent)) $('windowed').closest('label').hidden = true;   // always a screen-sized window there
   $('server').textContent = `Servidor ${s.server}`;
   $('version').textContent = `launcher ${s.version}`;
   fillResolutions(s.resolution);
