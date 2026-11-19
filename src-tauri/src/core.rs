@@ -208,11 +208,12 @@ fn banned(rest: &str) -> String {
 /// A time span in words, the two largest units: "6 días y 23 horas", "5 horas y 1 minuto", "12 minutos".
 fn left(seconds: u64) -> String {
     let unit = |n: u64, one: &str, many: &str| format!("{} {}", n, if n == 1 { one } else { many });
-    let (d, h, m) = (seconds / 86400, seconds % 86400 / 3600, (seconds % 3600).div_ceil(60).max(1));
+    let minutes = seconds.div_ceil(60).max(1);
+    let (d, h, m) = (minutes / 1440, minutes % 1440 / 60, minutes % 60);
     let parts = if d > 0 {
         vec![unit(d, "día", "días"), unit(h, "hora", "horas")]
     } else if h > 0 {
-        vec![unit(h, "hora", "horas"), unit(m.min(59), "minuto", "minutos")]
+        vec![unit(h, "hora", "horas"), unit(m, "minuto", "minutos")]
     } else {
         vec![unit(m, "minuto", "minutos")]
     };
