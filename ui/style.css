@@ -40,6 +40,30 @@ button { font: inherit; cursor: pointer; border-radius: 2px; }
 }
 .primary:hover { background: var(--go-hi); }
 .primary:disabled { background: #2c3a40; color: #71828b; cursor: default; }
+/* All of its spacing is inside, so with Options and the invitation open it shrinks to nothing and Play stays put. */
+#notes { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+#notes[hidden] { display: none; }
+#notes.squeezed { visibility: hidden; }
+.notes-head {
+  color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;
+  margin-top: 14px; border-top: 1px solid var(--line); padding: 8px 0 6px;
+}
+#notesNew { background: var(--accent); color: var(--bg); font-weight: 700; font-size: 10px; letter-spacing: .5px; padding: 1px 6px; border-radius: 2px; }
+#notesList {
+  flex: 1; min-height: 0; margin-bottom: 14px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); outline: none;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent; user-select: text;
+}
+#notesList:focus-visible { border-color: var(--accent); }
+.note { padding: 9px 12px 10px; border-left: 2px solid transparent; }
+.note + .note { border-top: 1px solid var(--line); }
+.note.new { border-left-color: var(--accent); }
+.note-meta { display: flex; gap: 8px; align-items: baseline; font-size: 11px; color: var(--muted); }
+.note-tag { text-transform: uppercase; letter-spacing: 1px; color: var(--accent); font-size: 10px; }
+.note-new { margin-left: auto; color: var(--accent); font-weight: 700; font-size: 10px; letter-spacing: 1px; }
+.note h2 { margin: 2px 0 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.note ul { margin: 4px 0 0; padding-left: 16px; color: #c3d0d6; font-size: 12px; }
+.note li { overflow-wrap: anywhere; }
+.note li + li { margin-top: 2px; }
 footer { min-height: 62px; padding-top: 10px; }
 #bar { height: 6px; background: var(--panel); border: 1px solid var(--line); }
 #fill { height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }

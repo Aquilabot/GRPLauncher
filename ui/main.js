@@ -1,4 +1,5 @@
-// The launcher window. The work happens in the Rust side (commands get_state, play, pick_folder); this file
+// The launcher window. The work happens in the Rust side (commands get_state, get_notes, mark_notes_seen, play,
+// pick_folder); this file
 // collects what the player typed and shows the progress events.
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
@@ -55,6 +56,65 @@ $('form').addEventListener('submit', async (ev) => {
   await invoke('play', { args: { name, password, invite: creating ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked } });
 });
 
+// Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
+// last one the player saw get a mark; touching the list or pressing Play counts as seen (the marks stay until the
+// window closes, so the player can still tell which ones were new).
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const TAGS = { servidor: 'Servidor', launcher: 'Launcher', juego: 'Juego' };
+let notesTop = 0, notesSeen = 0;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
+
+function showDate(d) {
+  const [y, m, day] = d.split('-').map(Number);
+  return MONTHS[m - 1] ? `${day} ${MONTHS[m - 1]} ${y}` : d;
+}
+
+async function loadNotes() {
+  const r = await invoke('get_notes').catch(() => null);
+  const notes = (r && r.notes) || [];
+  $('notes').hidden = notes.length === 0;
+  if (!notes.length) return;
+  notesTop = notes[0].id;
+  notesSeen = Math.max(notesSeen, r.seen || 0);
+  const list = $('notesList');
+  list.replaceChildren(...notes.map((n) => {
+    const fresh = n.id > notesSeen;
+    const a = el('article', fresh ? 'note new' : 'note');
+    const meta = el('div', 'note-meta');
+    if (n.tag) meta.append(el('span', 'note-tag', TAGS[n.tag]));
+    if (n.date) meta.append(el('span', '', showDate(n.date)));
+    if (fresh) meta.append(el('span', 'note-new', 'NUEVO'));
+    a.append(meta, el('h2', '', n.title));
+    if (n.items.length) {
+      const ul = el('ul');
+      ul.append(...n.items.map((t) => el('li', '', t)));
+      a.append(ul);
+    }
+    return a;
+  }));
+  const fresh = notes.filter((n) => n.id > notesSeen).length;
+  $('notesNew').hidden = fresh === 0;
+  $('notesNew').textContent = fresh === 1 ? '1 nueva' : `${fresh} nuevas`;
+}
+
+function markNotesSeen() {
+  if (notesTop <= notesSeen) return;
+  notesSeen = notesTop;
+  $('notesNew').hidden = true;
+  invoke('mark_notes_seen', { id: notesTop });
+}
+
+// With Options and the invitation open there is no room left for the list: hide the panel rather than show half a header.
+new ResizeObserver(() => $('notes').classList.toggle('squeezed', $('notesList').clientHeight < 24)).observe($('notes'));
+for (const ev of ['pointerdown', 'wheel', 'keydown']) $('notesList').addEventListener(ev, markNotesSeen, { passive: true });
+$('form').addEventListener('submit', markNotesSeen);
+
 listen('status', (e) => setStatus(e.payload.text, e.payload.fraction));
 listen('playing', () => { if (tauri) tauri.window.getCurrentWindow().minimize(); });
 listen('done', (e) => {
@@ -63,6 +123,7 @@ listen('done', (e) => {
   $('password').value = '';
   if (!e.payload.error) { $('create').checked = false; $('create').dispatchEvent(new Event('change')); }
   if (tauri) { const w = tauri.window.getCurrentWindow(); w.unminimize(); w.setFocus(); }
+  loadNotes(); // the server may have changed while the player was in the game
 });
 
 (async () => {
@@ -74,4 +135,5 @@ listen('done', (e) => {
   $('version').textContent = `launcher ${s.version}`;
   fillResolutions(s.resolution);
   (s.name ? $('password') : $('name')).focus();
+  loadNotes();
 })();
