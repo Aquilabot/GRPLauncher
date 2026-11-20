@@ -31,6 +31,12 @@ El launcher usa "Microsoft Edge WebView2", que Windows 11 trae de serie y casi t
 también. Si no lo tienes, instálalo desde la página de Microsoft (busca "WebView2 Runtime", el
 "Evergreen Bootstrapper") y vuelve a abrir el launcher.
 
+DIRECTX 9
+El juego necesita DirectX 9 (d3dx9_43.dll, XINPUT1_3.dll), que Windows 10 y 11 no traen. La primera vez que
+pulses JUGAR, el launcher lo instala desde la carpeta del juego: Windows pide permiso de administrador
+(acéptalo) y tarda un momento. Si Windows ofrece instalar ".NET Framework 3.5", puedes omitirlo: el juego
+no lo necesita. Si la instalación falla, ejecuta a mano DXSETUP.exe de la carpeta DXRedist del juego.
+
 OPCIONES
 - Carpeta del juego: dónde se instala. Por defecto, %LOCALAPPDATA%\GRP\Ghost Recon Phantoms.
 - Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en

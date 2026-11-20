@@ -623,9 +623,107 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     run_game(game_dir, &format!("{}.{}", a[1], a[2]), progress, playing)
 }
 
+/// The 32-bit DirectX 9 DLLs of the June 2010 runtime that the game needs and Windows 10 and 11 do not ship.
+/// Wine and Proton prefixes carry their own, so under Wine they are always there.
+#[cfg(windows)]
+const DX_DLLS: [&str; 2] = ["d3dx9_43.dll", "xinput1_3.dll"];
+
+/// Where 32-bit system DLLs live: SysWOW64 on 64-bit Windows, System32 on 32-bit. GRP_DX_CHECK names another folder
+/// to look in instead (tests: an empty folder makes the launcher install DirectX again).
+#[cfg(windows)]
+fn dx_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("GRP_DX_CHECK") {
+        return PathBuf::from(dir);
+    }
+    let windows = std::env::var_os("WINDIR").or_else(|| std::env::var_os("SystemRoot")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    let wow = windows.join("SysWOW64");
+    if wow.is_dir() {
+        wow
+    } else {
+        windows.join("System32")
+    }
+}
+
+/// Installs the DirectX 9 runtime from the game folder's DXRedist when one of DX_DLLS is missing: DXSETUP.exe /silent,
+/// elevated (one UAC prompt), waited for. A run that succeeded is not repeated while the launcher stays open.
+#[cfg(windows)]
+fn ensure_directx(game_dir: &Path, progress: &dyn Fn(&str, f64)) -> Result<(), String> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static INSTALLED: AtomicBool = AtomicBool::new(false);
+    let dir = dx_dir();
+    let missing: Vec<&str> = DX_DLLS.into_iter().filter(|f| !dir.join(f).is_file()).collect();
+    if missing.is_empty() || INSTALLED.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+    let setup = game_dir.join("DXRedist").join("DXSETUP.exe");
+    log(&format!("directx: {} missing in {}", missing.join(", "), dir.display()));
+    if !setup.is_file() {
+        return Err(format!("Falta DirectX 9 ({}) y su instalador no está en la carpeta del juego:\n{}", missing.join(", "), setup.display()));
+    }
+    progress("Instalando DirectX 9 (solo la primera vez)... Si Windows ofrece instalar .NET Framework 3.5, puedes omitirlo.", -1.0);
+    let by_hand = format!("Para instalarlo a mano, ejecuta DXSETUP.exe de la carpeta DXRedist del juego y vuelve a pulsar Jugar:\n{}", setup.display());
+    match run_elevated(&setup, "/silent") {
+        Ok(0) => {
+            log("directx: DXSETUP finished");
+            INSTALLED.store(true, Ordering::Relaxed);
+            Ok(())
+        }
+        Ok(code) => {
+            log(&format!("directx: DXSETUP exit code {}", code));
+            Err(format!("La instalación de DirectX 9 falló (código {}). El juego no puede abrirse sin él.\n{}", code as i32, by_hand))
+        }
+        Err(windows_sys::Win32::Foundation::ERROR_CANCELLED) => {
+            log("directx: UAC prompt declined");
+            Err(format!("El juego necesita DirectX 9 y su instalación pide permiso de administrador. Vuelve a pulsar Jugar y acepta el aviso de Windows.\n{}", by_hand))
+        }
+        Err(e) => {
+            log(&format!("directx: DXSETUP did not start, error {}", e));
+            Err(format!("No se pudo abrir el instalador de DirectX 9 (error {}).\n{}", e, by_hand))
+        }
+    }
+}
+
+/// Runs a program as administrator and waits for it: its exit code, or the Windows error when it did not start
+/// (ERROR_CANCELLED: the UAC prompt was declined).
+#[cfg(windows)]
+fn run_elevated(exe: &Path, args: &str) -> Result<u32, u32> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+    use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let wide = |s: &std::ffi::OsStr| s.encode_wide().chain(Some(0)).collect::<Vec<u16>>();
+    let verb = wide("runas".as_ref());
+    let file = wide(exe.as_os_str());
+    let params = wide(args.as_ref());
+    let dir = wide(exe.parent().unwrap_or(exe).as_os_str());
+    unsafe {
+        let mut info: SHELLEXECUTEINFOW = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+        info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+        info.lpVerb = verb.as_ptr();
+        info.lpFile = file.as_ptr();
+        info.lpParameters = params.as_ptr();
+        info.lpDirectory = dir.as_ptr();
+        info.nShow = SW_SHOWNORMAL;
+        if ShellExecuteExW(&mut info) == 0 {
+            return Err(GetLastError());
+        }
+        if info.hProcess.is_null() {
+            return Err(0);
+        }
+        WaitForSingleObject(info.hProcess, INFINITE);
+        let mut code = 1u32;
+        GetExitCodeProcess(info.hProcess, &mut code);
+        CloseHandle(info.hProcess);
+        Ok(code)
+    }
+}
+
 /// Runs the game with the session already made ("<name>.<token>") and waits for it to exit.
 #[cfg(windows)]
 pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
+    ensure_directx(game_dir, progress)?;
     crate::pipe::start(session.to_string());
     std::thread::sleep(Duration::from_millis(500));
     progress("Abriendo el juego...", -1.0);

@@ -27,6 +27,12 @@ The program is not code-signed: SmartScreen and antivirus warn on first run (`LE
 Build: `./build.sh` (cross-compiles from Linux with cargo-xwin); `./build.sh publish` also uploads it, and every
 installed launcher replaces itself on its next start. Raise `VERSION` in `core.rs` for each release.
 The window needs the WebView2 runtime (part of Windows 11 and of most Windows 10).
+The game needs the 32-bit DirectX 9 runtime of June 2010 (`d3dx9_43.dll`, `xinput1_3.dll`), which Windows 10 and 11
+lack. Before starting the game, when either DLL is missing from `SysWOW64` (`System32` on 32-bit Windows), the launcher
+runs `DXRedist\DXSETUP.exe /silent` from the game folder elevated (one UAC prompt) and waits; a declined prompt or a
+failed setup stops there with what to do. `GRP_DX_CHECK=<folder>` looks for the DLLs in that folder instead (an empty
+one forces the install, for tests). Wine prefixes carry their own copies, so under Wine nothing runs. DXSETUP probes
+for .NET to decide about Managed DirectX, which makes Windows offer .NET Framework 3.5; the game does not need it.
 
 Linux: `cargo build --release` in `src-tauri/` gives a native launcher (needs webkit2gtk-4.1 and `umu-run`). It signs in
 and prepares the game folder itself, then runs the game inside Wine through `umu-run`, with the Windows build
