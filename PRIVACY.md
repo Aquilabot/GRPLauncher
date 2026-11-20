@@ -8,15 +8,16 @@ only when you use it:
   itself is never sent or stored), the launcher's version number and, when creating an account, the invitation
   code. The server answers with a session token valid for 12 hours, which the launcher hands to the game.
 - **Keeping itself and the game up to date**: it downloads `version.txt` and, when there is a newer launcher, the
-  new program; it downloads the list of game files and the files that are missing or different. Those requests
-  carry nothing but the file names and the access key the server returned at sign-in.
+  new program; it downloads the list of game files and the files that are missing or different, and, with
+  "Mejoras del cliente" on (since version 7), the hash of the improvements file and the file when it changed.
+  Those requests carry nothing but the file names and the access key the server returned at sign-in.
 - **Showing the server's news** (since version 5): when the window opens and when the game closes it downloads
   `notes.json`, a public list of changes. The request carries nothing about you.
 
 As with any connection, the server sees your IP address; it keeps it in its access log.
 
 What the launcher keeps on your computer: the nickname (never the password), the folder and the resolution you
-chose, the number of the last news entry you saw, a log of its own actions, and the game files. On Windows they are next to the program; on Linux in
+chose (client improvements and frame cap included), the number of the last news entry you saw, a log of its own actions, and the game files. On Windows they are next to the program; on Linux in
 `~/.config/GRPLauncher` and `~/.local/share/GRPLauncher`.
 
 It has no telemetry, analytics, advertising or crash reporting, and it contacts no other system. This program

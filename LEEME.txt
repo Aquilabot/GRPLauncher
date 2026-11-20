@@ -35,6 +35,10 @@ OPCIONES
 - Carpeta del juego: dónde se instala. Por defecto, %LOCALAPPDATA%\GRP\Ghost Recon Phantoms.
 - Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en
   ventana.
+- Mejoras del cliente (activadas por defecto): el launcher pone un archivo nuestro, version.dll, en la
+  carpeta del juego. Con él, Opciones > Vídeo del juego ofrece resoluciones de más de 1920 x 1200 y el
+  juego pasa de 60 FPS. El límite de FPS se elige al lado: "Automático" usa la frecuencia de tu monitor
+  (hasta 240). Si las desactivas, el launcher borra ese archivo y el juego queda como el original.
 
 El launcher guarda tu nickname y tus opciones (nunca la contraseña) en %APPDATA%\GRPLauncher, junto con
 un registro (launcher.log) que sirve si algo falla: mándalo si te piden ayuda.

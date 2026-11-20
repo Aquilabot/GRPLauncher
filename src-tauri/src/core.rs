@@ -485,6 +485,67 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
     Ok(())
 }
 
+// ---- client improvements ----
+
+/// "Mejoras del cliente" switched on: our version.dll in the game folder, set by grp-client.ini next to it (more
+/// display modes in Options > Video, a frame cap other than 60). Switched off, neither file is there and the game is
+/// the original.
+#[derive(Clone, Copy)]
+pub struct ClientMods {
+    pub max_fps: Option<u32>, // None: the monitor's refresh rate (the DLL clamps it to 60-240)
+}
+
+const CLIENT_DLL: &str = "version.dll";
+const CLIENT_INI: &str = "grp-client.ini";
+
+/// The player's choice: on or off, and the frame cap as typed (a number; anything else is automatic).
+pub fn client_mods(on: bool, max_fps: &str) -> Option<ClientMods> {
+    on.then(|| ClientMods { max_fps: max_fps.trim().parse().ok() })
+}
+
+/// Brings the DLL in the game folder up to the one published next to the vault: client/version.txt holds
+/// "<sha256> <size>" of client/version.dll. The file only ever lands whole and checked (see download).
+fn fetch_client_dll(vault_key: &str, dll: &Path) -> Result<(), String> {
+    let base = format!("{}/files/{}/client/", base_url(), vault_key);
+    let text = get_text(&format!("{}version.txt", base), 10)?;
+    let mut v = text.split_whitespace();
+    let (sha, size) = match (v.next(), v.next().and_then(|s| s.parse::<u64>().ok())) {
+        (Some(sha), Some(size)) if sha.len() == 64 && sha.bytes().all(|b| b.is_ascii_hexdigit()) => (sha.to_lowercase(), size),
+        _ => return Err(format!("bad client/version.txt: {}", text.chars().take(80).collect::<String>())),
+    };
+    if sha256_file(dll).map(|h| h == sha).unwrap_or(false) {
+        return Ok(());
+    }
+    download(&format!("{}{}", base, CLIENT_DLL), dll, size, &sha, &mut |_| {})?;
+    log(&format!("client dll {} installed", &sha[..12]));
+    Ok(())
+}
+
+/// Makes the game folder match the choice. On: the DLL (fetched when the sign-in gave a vault key) and its settings.
+/// Off: removes both. A failed download is logged and the game starts anyway, with the DLL it had or none.
+fn set_client_mods(vault_key: Option<&str>, game_dir: &Path, mods: Option<ClientMods>, progress: &dyn Fn(&str, f64)) {
+    let (dll, ini) = (game_dir.join(CLIENT_DLL), game_dir.join(CLIENT_INI));
+    let Some(m) = mods else {
+        for f in [&dll, &ini, &PathBuf::from(format!("{}.part", dll.display()))] {
+            match std::fs::remove_file(f) {
+                Ok(()) => log(&format!("client improvements off: removed {}", f.display())),
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => log(&format!("could not remove {}: {}", f.display(), e)),
+                Err(_) => {}
+            }
+        }
+        return;
+    };
+    if let Some(key) = vault_key {
+        progress("Comprobando las mejoras del cliente...", -1.0);
+        if let Err(e) = fetch_client_dll(key, &dll) {
+            log(&format!("client dll not updated: {}", e));
+        }
+    }
+    let max_fps = m.max_fps.map(|n| n.to_string()).unwrap_or_default();
+    let _ = std::fs::write(&ini, format!("[Client]\r\nMaxFps={}\r\nUnlockResolutions=1\r\n", max_fps));
+    log(&format!("client improvements on: max fps {}", if max_fps.is_empty() { "auto" } else { &max_fps }));
+}
+
 // ---- the game ----
 
 pub struct PlayOptions {
@@ -492,6 +553,7 @@ pub struct PlayOptions {
     pub width: u32,  // 0: leave the game's resolution as it is
     pub height: u32,
     pub windowed: bool,
+    pub client: Option<ClientMods>, // None: client improvements off
 }
 
 /// The game reads its resolution from GraphicSettings.ini in its folder (DisplayWidth, DisplayHeight, Windowed).
@@ -557,6 +619,7 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
         return Err(format!("No se encontró el juego en:\n{}", game_dir.join(GAME_EXE).display()));
     }
     set_resolution(game_dir, o);
+    set_client_mods(if o.sync { a.get(3).copied() } else { None }, game_dir, o.client, progress);
     run_game(game_dir, &format!("{}.{}", a[1], a[2]), progress, playing)
 }
 
@@ -614,6 +677,8 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
         .env("WINEPREFIX", &prefix)
         .env("GAMEID", "umu-default")
         .env("PROTONPATH", &c.proton)
+        // as on Windows: a version.dll in the game folder (ours, with client improvements on) wins over Wine's own
+        .env("WINEDLLOVERRIDES", "version=n,b")
         .arg(&helper)
         .arg("--session")
         .arg(session)

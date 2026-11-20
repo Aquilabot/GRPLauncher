@@ -1,11 +1,13 @@
 # GRPLauncher
 
-Launcher for playing Ghost Recon Phantoms (2016 client, unmodified) on our own servers. Tauri 2: the window is
+Launcher for playing Ghost Recon Phantoms (2016 client) on our own servers. The game's own files stay as
+published; with "Mejoras del cliente" on, our `version.dll` next to them patches it in memory. Tauri 2: the window is
 plain HTML/JS in `ui/`, the work is Rust in `src-tauri/src/`.
 
 - `core.rs`: settings, the account service (`POST /login`, `POST /register`), self-update
   (`/launcher/version.txt`, `/launcher/GRPLauncher.exe`), the game folder check and download against the vault
-  (`/files/<key>/manifest.txt`; the key comes back from the sign-in), the resolution (`GraphicSettings.ini`) and
+  (`/files/<key>/manifest.txt`; the key comes back from the sign-in), the client improvements (below), the
+  resolution (`GraphicSettings.ini`) and
   starting the game with `/ForceDefaultSandbox=true /Sandbox=<server> /Port=<port> /OnlineAccessKey=<key>`.
 - `pipe.rs`: the game's launcher protocol on `\\.\pipe\Ghost_Recon_Phantoms`. The game signs in as
   `<name>.<session token>`.
@@ -31,6 +33,21 @@ and prepares the game folder itself, then runs the game inside Wine through `umu
 (fetched from the server) as the helper that answers the game's pipe (`--session`). `launcher.ini` takes three
 more keys there: `prefix` (Wine prefix), `proton` (PROTONPATH) and `phoenixdir` (an existing copy of the game to
 take identical files from). Settings and log go to `~/.config/GRPLauncher`, the game to `~/.local/share/GRPLauncher`.
+
+## Client improvements
+
+"Mejoras del cliente" in Opciones, on by default: our `version.dll` (source and patch list in the GRP repository,
+`client/grp-client-dll/`) in the game folder, with `grp-client.ini` next to it (`[Client]`, `MaxFps=` empty for the
+monitor's refresh rate or the number chosen, `UnlockResolutions=1`, CRLF). Switched off, the launcher deletes both and
+the game is the original. On Linux the game always runs with `WINEDLLOVERRIDES=version=n,b`, so a `version.dll` in its
+folder wins over Wine's, as it does on Windows. Kept in `settings.txt` as `clientmods` (`0` = off) and `maxfps`.
+
+The DLL is not in the vault's manifest (that list is mirrored on every start, whatever the option). It sits in
+`/files/<key>/client/` (on the VPS `/srv/grp/vault/client/`): `version.txt` holds `<sha256> <size>` of `version.dll`.
+On each start with the option on, the launcher compares that hash with the file in the game folder and, when they
+differ, downloads to `version.dll.part` and moves it into place only when size and hash match. A failed check is
+logged and the game starts with the DLL it had, or none. Publishing a new DLL is uploading `version.dll`, then
+`version.txt`.
 
 ## Release notes
 

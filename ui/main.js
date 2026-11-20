@@ -3,7 +3,7 @@
 // collects what the player typed and shows the progress events.
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, server: 'vista previa' } : null);
+const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, clientmods: true, maxfps: '', server: 'vista previa' } : null);
 const listen = tauri ? tauri.event.listen : async () => {};
 
 // The screen's own resolution, in real pixels (the page sees scaled ones on high-DPI screens).
@@ -21,6 +21,17 @@ function fillResolutions(saved) {
   sel.value = saved || 'auto';
 }
 
+// "Mejoras del cliente": our version.dll and its frame cap. No "no cap" here (about 1500 FPS in the menus); a value
+// written by hand in settings.txt is kept and shown.
+function fillMaxFps(saved) {
+  const sel = $('maxfps');
+  sel.add(new Option('Automático (frecuencia del monitor)', ''));
+  for (const n of [60, 120, 144, 165, 240]) sel.add(new Option(`${n} FPS`, String(n)));
+  if (saved && ![...sel.options].some((o) => o.value === saved)) sel.add(new Option(saved === '0' ? 'Sin límite' : `${saved} FPS`, saved));
+  sel.value = saved || '';
+}
+$('clientmods').addEventListener('change', () => { $('maxfps').disabled = !$('clientmods').checked; });
+
 function setStatus(text, fraction) {
   $('status').textContent = text || '';
   const show = typeof fraction === 'number' && fraction >= 0;
@@ -30,7 +41,8 @@ function setStatus(text, fraction) {
 
 function setBusy(busy) {
   $('play').disabled = busy;
-  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed']) $(id).disabled = busy;
+  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed', 'clientmods']) $(id).disabled = busy;
+  $('maxfps').disabled = busy || !$('clientmods').checked;
 }
 
 $('create').addEventListener('change', () => {
@@ -89,7 +101,7 @@ $('form').addEventListener('submit', async (ev) => {
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus('Conectando...');
-  await invoke('play', { args: { name, password, invite: creating ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked } });
+  await invoke('play', { args: { name, password, invite: creating ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value } });
 });
 
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
@@ -171,6 +183,9 @@ listen('done', (e) => {
   $('server').textContent = `Servidor ${s.server}`;
   $('version').textContent = `launcher ${s.version}`;
   fillResolutions(s.resolution);
+  fillMaxFps(s.maxfps);
+  $('clientmods').checked = s.clientmods;
+  $('clientmods').dispatchEvent(new Event('change'));
   (s.name ? $('password') : $('name')).focus();
   loadNotes();
 })();

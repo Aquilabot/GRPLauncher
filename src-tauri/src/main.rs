@@ -26,18 +26,28 @@ struct State {
     gamedir: String,
     resolution: String, // "auto" or "WxH"
     windowed: bool,
+    clientmods: bool,
+    maxfps: String, // empty: the monitor's refresh rate
     server: String,
+}
+
+/// "Mejoras del cliente" as settings.txt keeps it: "clientmods" (on unless "0") and "maxfps" (empty: automatic).
+fn saved_client_mods(s: &std::collections::HashMap<String, String>) -> (bool, String) {
+    (s.get("clientmods").map_or(true, |v| v != "0"), s.get("maxfps").cloned().unwrap_or_default())
 }
 
 #[tauri::command]
 fn get_state() -> State {
     let s = core::settings();
+    let (clientmods, maxfps) = saved_client_mods(&s);
     State {
         version: core::VERSION,
         name: s.get("name").cloned().unwrap_or_default(),
         gamedir: s.get("gamedir").filter(|v| !v.is_empty()).cloned().unwrap_or_else(|| core::default_game_dir().to_string_lossy().into_owned()),
         resolution: s.get("resolution").cloned().unwrap_or_else(|| "auto".into()),
         windowed: s.get("windowed").map(|v| v == "1").unwrap_or(false),
+        clientmods,
+        maxfps,
         server: core::config().server.clone(),
     }
 }
@@ -52,6 +62,8 @@ struct PlayArgs {
     width: u32,
     height: u32,
     windowed: bool,
+    clientmods: bool,
+    maxfps: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -74,6 +86,8 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("gamedir", args.gamedir.clone()),
             ("resolution", args.resolution.clone()),
             ("windowed", if args.windowed { "1" } else { "0" }.to_string()),
+            ("clientmods", if args.clientmods { "1" } else { "0" }.to_string()),
+            ("maxfps", args.maxfps.clone()),
         ]);
         let progress_app = app.clone();
         let progress = move |text: &str, fraction: f64| {
@@ -90,7 +104,8 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         }
         if error.is_none() {
             let playing_app = app.clone();
-            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed };
+            let client = core::client_mods(args.clientmods, &args.maxfps);
+            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, client };
             error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
             })
@@ -177,7 +192,9 @@ fn main() {
         }
         let dir = arg(&args, "--gamedir").map(std::path::PathBuf::from).unwrap_or_else(core::default_game_dir);
         let last = std::sync::Mutex::new(String::new());
-        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true };
+        let (on, max_fps) = saved_client_mods(&core::settings());
+        let client = core::client_mods(on, &max_fps);
+        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, client };
         let r = core::play(
             &name,
             &pw,
