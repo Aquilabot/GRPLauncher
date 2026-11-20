@@ -23,6 +23,9 @@ The password never leaves the machine: what is sent is PBKDF2-HMAC-SHA1(password
 (`https://grp.limacashout.pro`, certificates checked against the system's store); `accounturl` in `launcher.ini`
 points it somewhere else, and a server on your own machine is still reached in plain HTTP.
 The program is not code-signed: SmartScreen and antivirus warn on first run (`LEEME.txt` tells players what to do).
+Its version resource names the publisher and copyright (`bundle` in `tauri.conf.json`) and its manifest
+(`src-tauri/app.manifest`) asks to run as the user (`asInvoker`). Opened from inside a zip (WinRAR, 7-Zip and Explorer
+run it from `%TEMP%`), it only says to extract the zip first and closes.
 
 Build: `./build.sh` (cross-compiles from Linux with cargo-xwin); `./build.sh publish` also uploads it, and every
 installed launcher replaces itself on its next start. Raise `VERSION` in `core.rs` for each release.

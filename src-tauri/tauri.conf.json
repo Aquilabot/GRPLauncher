@@ -11,5 +11,10 @@
     ],
     "security": { "csp": null }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.ico", "icons/icon.png"] }
+  "bundle": {
+    "active": false,
+    "publisher": "Aquilabot",
+    "copyright": "Copyright (c) 2026 Aquilabot. MPL-2.0",
+    "icon": ["icons/icon.ico", "icons/icon.png"]
+  }
 }

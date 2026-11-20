@@ -171,6 +171,17 @@ fn arg(args: &[String], key: &str) -> Option<String> {
     args.iter().position(|a| a == key).and_then(|i| args.get(i + 1).cloned())
 }
 
+/// Whether this program runs from the temporary folder, where WinRAR, 7-Zip and Explorer put a program opened from
+/// inside an archive (%TEMP%\Rar$EXa..., %TEMP%\Temp1_<zip>): it and its launcher.ini vanish when the archive closes.
+#[cfg(windows)]
+fn inside_temp_folder() -> bool {
+    let full = |p: std::path::PathBuf| p.canonicalize().ok().map(|p| p.to_string_lossy().to_lowercase());
+    match (std::env::current_exe().ok().and_then(full), full(std::env::temp_dir())) {
+        (Some(exe), Some(temp)) => exe.starts_with(&format!("{}\\", temp.trim_end_matches('\\'))),
+        _ => false,
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Before anything else: this is a child of the launcher that only answers one question (see core::vulkan_ready).
@@ -181,6 +192,18 @@ fn main() {
         std::process::exit(if r.is_ok() { 0 } else { 1 });
     }
     core::log(&format!("launcher {} started, server {}", core::VERSION, core::config().server));
+    #[cfg(windows)]
+    if inside_temp_folder() {
+        core::log("started from the temporary folder (inside a zip opened with WinRAR or Explorer): asked to extract it first");
+        let text: Vec<u16> = "GRP Launcher se abrió desde dentro del archivo .zip.\n\nPrimero extrae todo el contenido del .zip en una carpeta (por ejemplo en Documentos) y abre GRPLauncher.exe desde ahí."
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let title: Vec<u16> = "GRP Launcher".encode_utf16().chain(Some(0)).collect();
+        use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONWARNING, MB_OK};
+        unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONWARNING) };
+        return;
+    }
     if core::self_update(&args) {
         return;
     }
