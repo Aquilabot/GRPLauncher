@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 8;
+pub const VERSION: u32 = 9;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
