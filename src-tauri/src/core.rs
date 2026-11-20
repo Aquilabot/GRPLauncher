@@ -583,6 +583,12 @@ fn dxvk_files(game_dir: &Path) -> [PathBuf; 3] {
 /// sign-in gave a vault key) and licence. Otherwise neither is there and the game uses Direct3D 9 as published.
 #[cfg(windows)]
 fn set_dxvk(vault_key: Option<&str>, game_dir: &Path, on: bool, progress: &dyn Fn(&str, f64)) {
+    // A d3d9.dll that is not DXVK is the player's own (ReShade or the like): never overwritten nor removed.
+    let dll = game_dir.join(DXVK_DLL);
+    if dll.is_file() && !is_dxvk_file(&dll) {
+        log(&format!("{} is not DXVK (the player's own?): left as it is, the launcher does not place DXVK", dll.display()));
+        return;
+    }
     if !on {
         remove_files("vulkan (dxvk) off", &dxvk_files(game_dir));
         return;
@@ -822,13 +828,20 @@ fn prefix_d3d9(prefix: &Path) -> String {
     format!("{} ({}){}", kind, file.display(), wined3d)
 }
 
-#[cfg(not(windows))]
+/// Whether a d3d9.dll on disk is DXVK's (an unreadable one is not).
+#[cfg(windows)]
+fn is_dxvk_file(dll: &Path) -> bool {
+    std::fs::read(dll).map(|b| d3d9_kind(&b) == D3D9_DXVK).unwrap_or(false)
+}
+
+const D3D9_DXVK: &str = "DXVK (Vulkan)";
+
 fn d3d9_kind(dll: &[u8]) -> &'static str {
     let has = |s: &[u8]| dll.windows(s.len()).any(|w| w == s);
     if has(b"Wine builtin DLL") {
         "WineD3D (Wine's own d3d9, not DXVK)"
     } else if has(b"dxvk") {
-        "DXVK (Vulkan)"
+        D3D9_DXVK
     } else {
         "unknown d3d9.dll"
     }
@@ -1022,7 +1035,7 @@ fn run_elevated(exe: &Path, args: &str) -> Result<u32, u32> {
 #[cfg(windows)]
 pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
     ensure_directx(game_dir, progress)?;
-    let dxvk = game_dir.join(DXVK_DLL).is_file();
+    let dxvk = is_dxvk_file(&game_dir.join(DXVK_DLL));
     let dxvk_log = game_dir.join(DXVK_LOG);
     if dxvk {
         let _ = std::fs::remove_file(&dxvk_log); // only this run's log counts
@@ -1174,7 +1187,6 @@ mod tests {
         assert_eq!(dxvk_failure(Some("info:  DXVK: v3.1.1\n")).unwrap(), "DXVK never showed a frame");
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn tells_dxvk_from_wined3d() {
         assert_eq!(d3d9_kind(b"MZ\x90\0Wine builtin DLL\0..."), "WineD3D (Wine's own d3d9, not DXVK)");
