@@ -6,6 +6,7 @@
 //   GRPLauncher.exe --user N --password P [--invite C] [--gamedir <folder>] [--nosync]   no window (tests)
 //   GRPLauncher.exe --user N --password P --reset <code>   sets the new password P with an admin's code, no window (tests)
 //   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
+//   GRPLauncher.exe --vulkan-check                    prints "ok <device>" or "no <why>": can DXVK run here (Windows)
 //
 // Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language.
 // What the player chose last (never the password) and the last release note seen: %APPDATA%\GRPLauncher\settings.txt;
@@ -28,12 +29,18 @@ struct State {
     windowed: bool,
     clientmods: bool,
     maxfps: String, // empty: the monitor's refresh rate
+    dxvk: bool,
     server: String,
 }
 
 /// "Mejoras del cliente" as settings.txt keeps it: "clientmods" (on unless "0") and "maxfps" (empty: automatic).
 fn saved_client_mods(s: &std::collections::HashMap<String, String>) -> (bool, String) {
     (s.get("clientmods").map_or(true, |v| v != "0"), s.get("maxfps").cloned().unwrap_or_default())
+}
+
+/// "Vulkan (DXVK)" as settings.txt keeps it: "dxvk", on unless "0" (the launcher writes "0" when the game failed with it).
+fn saved_dxvk(s: &std::collections::HashMap<String, String>) -> bool {
+    s.get("dxvk").map_or(true, |v| v != "0")
 }
 
 #[tauri::command]
@@ -48,6 +55,7 @@ fn get_state() -> State {
         windowed: s.get("windowed").map(|v| v == "1").unwrap_or(false),
         clientmods,
         maxfps,
+        dxvk: saved_dxvk(&s),
         server: core::config().server.clone(),
     }
 }
@@ -64,6 +72,7 @@ struct PlayArgs {
     windowed: bool,
     clientmods: bool,
     maxfps: String,
+    dxvk: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -88,6 +97,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("windowed", if args.windowed { "1" } else { "0" }.to_string()),
             ("clientmods", if args.clientmods { "1" } else { "0" }.to_string()),
             ("maxfps", args.maxfps.clone()),
+            ("dxvk", if args.dxvk { "1" } else { "0" }.to_string()),
         ]);
         let progress_app = app.clone();
         let progress = move |text: &str, fraction: f64| {
@@ -105,7 +115,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         if error.is_none() {
             let playing_app = app.clone();
             let client = core::client_mods(args.clientmods, &args.maxfps);
-            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, client };
+            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, client, dxvk: args.dxvk };
             error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
             })
@@ -163,6 +173,13 @@ fn arg(args: &[String], key: &str) -> Option<String> {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Before anything else: this is a child of the launcher that only answers one question (see core::vulkan_ready).
+    #[cfg(windows)]
+    if args.first().map(String::as_str) == Some("--vulkan-check") {
+        let r = core::vulkan_probe();
+        println!("{}", r.as_ref().map_or_else(|e| format!("no {}", e), |d| format!("ok {}", d)));
+        std::process::exit(if r.is_ok() { 0 } else { 1 });
+    }
     core::log(&format!("launcher {} started, server {}", core::VERSION, core::config().server));
     if core::self_update(&args) {
         return;
@@ -192,9 +209,10 @@ fn main() {
         }
         let dir = arg(&args, "--gamedir").map(std::path::PathBuf::from).unwrap_or_else(core::default_game_dir);
         let last = std::sync::Mutex::new(String::new());
-        let (on, max_fps) = saved_client_mods(&core::settings());
+        let saved = core::settings();
+        let (on, max_fps) = saved_client_mods(&saved);
         let client = core::client_mods(on, &max_fps);
-        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, client };
+        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, client, dxvk: saved_dxvk(&saved) };
         let r = core::play(
             &name,
             &pw,

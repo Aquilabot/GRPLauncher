@@ -3,7 +3,7 @@
 // collects what the player typed and shows the progress events.
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, clientmods: true, maxfps: '', server: 'vista previa' } : null);
+const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, clientmods: true, maxfps: '', dxvk: true, server: 'vista previa' } : null);
 const listen = tauri ? tauri.event.listen : async () => {};
 
 // The screen's own resolution, in real pixels (the page sees scaled ones on high-DPI screens).
@@ -32,6 +32,13 @@ function fillMaxFps(saved) {
 }
 $('clientmods').addEventListener('change', () => { $('maxfps').disabled = !$('clientmods').checked; });
 
+// "Vulkan (DXVK)": on Windows a choice; on Linux the game always runs on Proton's DXVK, so it shows as on and fixed.
+const LINUX = /Linux/.test(navigator.userAgent);
+function showDxvk(on) {
+  $('dxvk').checked = LINUX || on;
+  if (LINUX) $('dxvkNote').textContent = 'En Linux el juego ya usa Vulkan con el DXVK de Proton.';
+}
+
 function setStatus(text, fraction) {
   $('status').textContent = text || '';
   const show = typeof fraction === 'number' && fraction >= 0;
@@ -43,6 +50,7 @@ function setBusy(busy) {
   $('play').disabled = busy;
   for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed', 'clientmods']) $(id).disabled = busy;
   $('maxfps').disabled = busy || !$('clientmods').checked;
+  $('dxvk').disabled = busy || LINUX;
 }
 
 $('create').addEventListener('change', () => {
@@ -101,7 +109,7 @@ $('form').addEventListener('submit', async (ev) => {
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus('Conectando...');
-  await invoke('play', { args: { name, password, invite: creating ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value } });
+  await invoke('play', { args: { name, password, invite: creating ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value, dxvk: $('dxvk').checked } });
 });
 
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
@@ -172,6 +180,7 @@ listen('done', (e) => {
   if (!e.payload.error) { $('create').checked = false; $('create').dispatchEvent(new Event('change')); }
   if (tauri) { const w = tauri.window.getCurrentWindow(); w.unminimize(); w.setFocus(); }
   loadNotes(); // the server may have changed while the player was in the game
+  invoke('get_state').then((s) => showDxvk(s.dxvk)); // a game that failed on Vulkan turned it off
 });
 
 (async () => {
@@ -179,13 +188,15 @@ listen('done', (e) => {
   $('name').value = s.name;
   $('gamedir').value = s.gamedir;
   $('windowed').checked = s.windowed;
-  if (/Linux/.test(navigator.userAgent)) $('windowed').closest('label').hidden = true;   // always a screen-sized window there
+  if (LINUX) $('windowed').closest('label').hidden = true;   // always a screen-sized window there
   $('server').textContent = `Servidor ${s.server}`;
   $('version').textContent = `launcher ${s.version}`;
   fillResolutions(s.resolution);
   fillMaxFps(s.maxfps);
   $('clientmods').checked = s.clientmods;
   $('clientmods').dispatchEvent(new Event('change'));
+  showDxvk(s.dxvk);
+  $('dxvk').disabled = LINUX;
   (s.name ? $('password') : $('name')).focus();
   loadNotes();
 })();

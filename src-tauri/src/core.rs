@@ -503,21 +503,24 @@ pub fn client_mods(on: bool, max_fps: &str) -> Option<ClientMods> {
     on.then(|| ClientMods { max_fps: max_fps.trim().parse().ok() })
 }
 
-/// Brings the DLL in the game folder up to the one published next to the vault: client/version.txt holds
-/// "<sha256> <size>" of client/version.dll. The file only ever lands whole and checked (see download).
+/// Brings a DLL in the game folder up to the one published next to the vault: client/<name>.txt holds
+/// "<sha256> <size>" of client/<name>.dll (version.txt for version.dll, d3d9.txt for d3d9.dll). The file only ever
+/// lands whole and checked (see download).
 fn fetch_client_dll(vault_key: &str, dll: &Path) -> Result<(), String> {
+    let name = dll.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let listing = format!("{}.txt", name.trim_end_matches(".dll"));
     let base = format!("{}/files/{}/client/", base_url(), vault_key);
-    let text = get_text(&format!("{}version.txt", base), 10)?;
+    let text = get_text(&format!("{}{}", base, listing), 10)?;
     let mut v = text.split_whitespace();
     let (sha, size) = match (v.next(), v.next().and_then(|s| s.parse::<u64>().ok())) {
         (Some(sha), Some(size)) if sha.len() == 64 && sha.bytes().all(|b| b.is_ascii_hexdigit()) => (sha.to_lowercase(), size),
-        _ => return Err(format!("bad client/version.txt: {}", text.chars().take(80).collect::<String>())),
+        _ => return Err(format!("bad client/{}: {}", listing, text.chars().take(80).collect::<String>())),
     };
     if sha256_file(dll).map(|h| h == sha).unwrap_or(false) {
         return Ok(());
     }
-    download(&format!("{}{}", base, CLIENT_DLL), dll, size, &sha, &mut |_| {})?;
-    log(&format!("client dll {} installed", &sha[..12]));
+    download(&format!("{}{}", base, name), dll, size, &sha, &mut |_| {})?;
+    log(&format!("client {} {} installed", name, &sha[..12]));
     Ok(())
 }
 
@@ -526,13 +529,7 @@ fn fetch_client_dll(vault_key: &str, dll: &Path) -> Result<(), String> {
 fn set_client_mods(vault_key: Option<&str>, game_dir: &Path, mods: Option<ClientMods>, progress: &dyn Fn(&str, f64)) {
     let (dll, ini) = (game_dir.join(CLIENT_DLL), game_dir.join(CLIENT_INI));
     let Some(m) = mods else {
-        for f in [&dll, &ini, &PathBuf::from(format!("{}.part", dll.display()))] {
-            match std::fs::remove_file(f) {
-                Ok(()) => log(&format!("client improvements off: removed {}", f.display())),
-                Err(e) if e.kind() != std::io::ErrorKind::NotFound => log(&format!("could not remove {}: {}", f.display(), e)),
-                Err(_) => {}
-            }
-        }
+        remove_files("client improvements off", &[dll.clone(), ini, PathBuf::from(format!("{}.part", dll.display()))]);
         return;
     };
     if let Some(key) = vault_key {
@@ -546,6 +543,297 @@ fn set_client_mods(vault_key: Option<&str>, game_dir: &Path, mods: Option<Client
     log(&format!("client improvements on: max fps {}", if max_fps.is_empty() { "auto" } else { &max_fps }));
 }
 
+/// Deletes files the launcher put in the game folder; one that is already gone is fine.
+fn remove_files(why: &str, files: &[PathBuf]) {
+    for f in files {
+        match std::fs::remove_file(f) {
+            Ok(()) => log(&format!("{}: removed {}", why, f.display())),
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => log(&format!("could not remove {}: {}", f.display(), e)),
+            Err(_) => {}
+        }
+    }
+}
+
+// ---- Vulkan through DXVK ----
+//
+// "Vulkan (DXVK)" on Windows: DXVK's 32-bit d3d9.dll in the game folder, next to our version.dll, so the game draws
+// through Vulkan as it does under Proton on Linux. It is placed only when the Vulkan check passes, and a game that
+// never showed a frame with it turns the option off. On Linux nothing is placed: Proton puts its own DXVK in the
+// prefix, and the launcher only logs which d3d9.dll the game ran with.
+
+/// Published next to the vault as client/d3d9.dll with client/d3d9.txt (see fetch_client_dll).
+#[cfg(windows)]
+const DXVK_DLL: &str = "d3d9.dll";
+/// DXVK's zlib licence, written next to its DLL.
+#[cfg(windows)]
+const DXVK_LICENSE: &str = "DXVK-LICENSE.txt";
+/// DXVK's own log, which it writes in the game's working directory (the game folder).
+#[cfg(windows)]
+const DXVK_LOG: &str = "GhostReconPhantoms_d3d9.log";
+/// What DXVK logs each time it makes a swapchain, that is, once it is about to show frames.
+#[cfg(any(windows, test))]
+const DXVK_PRESENTING: &str = "Presenter: Actual swapchain properties";
+
+#[cfg(windows)]
+fn dxvk_files(game_dir: &Path) -> [PathBuf; 3] {
+    [game_dir.join(DXVK_DLL), game_dir.join(format!("{}.part", DXVK_DLL)), game_dir.join(DXVK_LICENSE)]
+}
+
+/// Makes the game folder match the choice. On, with a Vulkan device DXVK accepts: its d3d9.dll (fetched when the
+/// sign-in gave a vault key) and licence. Otherwise neither is there and the game uses Direct3D 9 as published.
+#[cfg(windows)]
+fn set_dxvk(vault_key: Option<&str>, game_dir: &Path, on: bool, progress: &dyn Fn(&str, f64)) {
+    if !on {
+        remove_files("vulkan (dxvk) off", &dxvk_files(game_dir));
+        return;
+    }
+    progress("Comprobando Vulkan...", -1.0);
+    let device = match vulkan_ready() {
+        Ok(device) => device,
+        Err(why) => {
+            log(&format!("dxvk not used, the game runs on Direct3D 9: {}", why));
+            remove_files("dxvk not used", &dxvk_files(game_dir));
+            return;
+        }
+    };
+    log(&format!("vulkan ok: {}", device));
+    let dll = game_dir.join(DXVK_DLL);
+    if let Some(key) = vault_key {
+        if let Err(e) = fetch_client_dll(key, &dll) {
+            log(&format!("dxvk not updated: {}", e));
+        }
+    }
+    if dll.is_file() {
+        let _ = std::fs::write(game_dir.join(DXVK_LICENSE), include_str!("../../third-party/DXVK-LICENSE.txt"));
+        log("dxvk on: the game runs on Vulkan");
+    } else {
+        log("dxvk on but there is no d3d9.dll: the game runs on Direct3D 9");
+    }
+}
+
+/// Whether DXVK can run here, decided out of this process: a broken driver or Vulkan layer can crash or hang the
+/// process that loads it, so `GRPLauncher.exe --vulkan-check` (vulkan_probe) does it and this waits up to 20 s.
+/// Also needs the 32-bit Vulkan loader the game will load. GRP_VULKAN_CHECK=pass|fail decides instead (tests).
+#[cfg(windows)]
+fn vulkan_ready() -> Result<String, String> {
+    match std::env::var("GRP_VULKAN_CHECK").as_deref() {
+        Ok("pass") => return Ok("not checked (GRP_VULKAN_CHECK=pass)".into()),
+        Ok("fail") => return Err("not checked (GRP_VULKAN_CHECK=fail)".into()),
+        _ => {}
+    }
+    let loader = windows_dir().join("SysWOW64").join("vulkan-1.dll");
+    if !loader.is_file() {
+        return Err(format!("no 32-bit Vulkan loader ({})", loader.display()));
+    }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut child = std::process::Command::new(exe)
+        .arg("--vulkan-check")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("the Vulkan check did not start: {}", e))?;
+    let start = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        if start.elapsed() > Duration::from_secs(20) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("the Vulkan check did not finish in 20 s".into());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let mut out = String::new();
+    if let Some(mut o) = child.stdout.take() {
+        let _ = o.read_to_string(&mut out);
+    }
+    let out = out.trim();
+    match out.strip_prefix("ok ") {
+        Some(device) if status.success() => Ok(device.to_string()),
+        _ if out.is_empty() => Err(format!("the Vulkan check failed ({})", status)),
+        _ => Err(out.trim_start_matches("no ").to_string()),
+    }
+}
+
+/// Vulkan 1.3, the version DXVK asks of the driver (DxvkVulkanApiVersion).
+#[cfg(any(windows, test))]
+const VK_API_1_3: u32 = (1 << 22) | (3 << 12);
+/// The device extensions DXVK 3.1.1 refuses to run without (featureRequired in dxvk_device_info.cpp).
+#[cfg(any(windows, test))]
+const DXVK_EXTENSIONS: [&str; 6] =
+    ["VK_KHR_swapchain", "VK_EXT_robustness2", "VK_KHR_maintenance5", "VK_KHR_maintenance6", "VK_KHR_load_store_op_none", "VK_EXT_depth_clip_enable"];
+#[cfg(any(windows, test))]
+const VK_DEVICE_TYPE_CPU: i32 = 4;
+
+#[cfg(any(windows, test))]
+fn vk_version(v: u32) -> String {
+    format!("{}.{}.{}", (v >> 22) & 0x7f, (v >> 12) & 0x3ff, v & 0xfff)
+}
+
+/// Why DXVK would skip a Vulkan device, as DXVK's own device filter decides; None when it would use it.
+#[cfg(any(windows, test))]
+fn dxvk_device_problem(api_version: u32, device_type: i32, extensions: &[String]) -> Option<String> {
+    if device_type == VK_DEVICE_TYPE_CPU {
+        return Some("software renderer".into());
+    }
+    if api_version < VK_API_1_3 {
+        return Some(format!("Vulkan {}, DXVK needs 1.3", vk_version(api_version)));
+    }
+    let missing: Vec<&str> = DXVK_EXTENSIONS.into_iter().filter(|e| !extensions.iter().any(|x| x == e)).collect();
+    (!missing.is_empty()).then(|| format!("no {}", missing.join(", ")))
+}
+
+/// What `GRPLauncher.exe --vulkan-check` runs: the first Vulkan device DXVK would use ("<name> (Vulkan x.y.z)"), or
+/// why there is none (no driver, an old loader, each device and why DXVK would skip it).
+#[cfg(windows)]
+pub fn vulkan_probe() -> Result<String, String> {
+    use std::ffi::{c_char, c_void, CStr};
+    use std::ptr::{null, null_mut};
+    use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+    type Handle = *mut c_void; // VkInstance, VkPhysicalDevice
+    #[repr(C)]
+    struct AppInfo {
+        s_type: i32,
+        next: *const c_void,
+        app_name: *const c_char,
+        app_version: u32,
+        engine_name: *const c_char,
+        engine_version: u32,
+        api_version: u32,
+    }
+    #[repr(C)]
+    struct InstanceInfo {
+        s_type: i32,
+        next: *const c_void,
+        flags: u32,
+        app: *const AppInfo,
+        layer_count: u32,
+        layers: *const *const c_char,
+        extension_count: u32,
+        extensions: *const *const c_char,
+    }
+    #[repr(C)]
+    struct ExtensionProperties {
+        name: [c_char; 256],
+        spec_version: u32,
+    }
+    type GetInstanceProcAddr = unsafe extern "system" fn(Handle, *const c_char) -> *const c_void;
+    type EnumerateInstanceVersion = unsafe extern "system" fn(*mut u32) -> i32;
+    type CreateInstance = unsafe extern "system" fn(*const InstanceInfo, *const c_void, *mut Handle) -> i32;
+    type DestroyInstance = unsafe extern "system" fn(Handle, *const c_void);
+    type EnumeratePhysicalDevices = unsafe extern "system" fn(Handle, *mut u32, *mut Handle) -> i32;
+    // VkPhysicalDeviceProperties is 824 bytes: apiVersion at 0, deviceType at 16, deviceName (256) at 20
+    type GetPhysicalDeviceProperties = unsafe extern "system" fn(Handle, *mut u64);
+    type EnumerateDeviceExtensionProperties = unsafe extern "system" fn(Handle, *const c_char, *mut u32, *mut ExtensionProperties) -> i32;
+
+    let name = |raw: &[c_char]| unsafe { CStr::from_ptr(raw.as_ptr()) }.to_string_lossy().into_owned();
+    unsafe {
+        let wide: Vec<u16> = "vulkan-1.dll".encode_utf16().chain(Some(0)).collect();
+        let lib = LoadLibraryW(wide.as_ptr());
+        if lib.is_null() {
+            return Err("no Vulkan driver (vulkan-1.dll did not load)".into());
+        }
+        let gipa: GetInstanceProcAddr = match GetProcAddress(lib, c"vkGetInstanceProcAddr".as_ptr().cast()) {
+            Some(f) => std::mem::transmute(f),
+            None => return Err("vulkan-1.dll has no vkGetInstanceProcAddr".into()),
+        };
+        let get = |instance: Handle, f: &CStr| -> Result<*const c_void, String> {
+            let p = gipa(instance, f.as_ptr());
+            if p.is_null() {
+                Err(format!("the Vulkan loader has no {}", f.to_string_lossy()))
+            } else {
+                Ok(p)
+            }
+        };
+        let enumerate_version: EnumerateInstanceVersion = std::mem::transmute(get(null_mut(), c"vkEnumerateInstanceVersion").map_err(|_| "Vulkan 1.0 loader, DXVK needs 1.3".to_string())?);
+        let mut loader = 0u32;
+        enumerate_version(&mut loader);
+        if loader < VK_API_1_3 {
+            return Err(format!("Vulkan {} loader, DXVK needs 1.3", vk_version(loader)));
+        }
+        let app = AppInfo { s_type: 0, next: null(), app_name: c"GRPLauncher".as_ptr(), app_version: 0, engine_name: null(), engine_version: 0, api_version: VK_API_1_3 };
+        let info = InstanceInfo { s_type: 1, next: null(), flags: 0, app: &app, layer_count: 0, layers: null(), extension_count: 0, extensions: null() };
+        let create: CreateInstance = std::mem::transmute(get(null_mut(), c"vkCreateInstance")?);
+        let mut instance: Handle = null_mut();
+        let r = create(&info, null(), &mut instance);
+        if r != 0 {
+            return Err(format!("vkCreateInstance failed ({})", r));
+        }
+        let result = (|| -> Result<String, String> {
+            let enumerate: EnumeratePhysicalDevices = std::mem::transmute(get(instance, c"vkEnumeratePhysicalDevices")?);
+            let properties: GetPhysicalDeviceProperties = std::mem::transmute(get(instance, c"vkGetPhysicalDeviceProperties")?);
+            let extensions_of: EnumerateDeviceExtensionProperties = std::mem::transmute(get(instance, c"vkEnumerateDeviceExtensionProperties")?);
+            let mut count = 0u32;
+            enumerate(instance, &mut count, null_mut());
+            let mut devices: Vec<Handle> = vec![null_mut(); count as usize];
+            enumerate(instance, &mut count, devices.as_mut_ptr());
+            devices.truncate(count as usize);
+            let mut skipped = Vec::new();
+            for d in devices {
+                let mut p = [0u64; 128];
+                properties(d, p.as_mut_ptr());
+                let bytes = std::slice::from_raw_parts(p.as_ptr().cast::<u8>(), 1024);
+                let api = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+                let kind = i32::from_le_bytes(bytes[16..20].try_into().unwrap());
+                let device = format!("{} (Vulkan {})", name(std::slice::from_raw_parts(bytes[20..].as_ptr().cast::<c_char>(), 256)), vk_version(api));
+                let mut n = 0u32;
+                extensions_of(d, null(), &mut n, null_mut());
+                let mut list: Vec<ExtensionProperties> = (0..n).map(|_| ExtensionProperties { name: [0; 256], spec_version: 0 }).collect();
+                extensions_of(d, null(), &mut n, list.as_mut_ptr());
+                let names: Vec<String> = list.iter().take(n as usize).map(|e| name(&e.name)).collect();
+                match dxvk_device_problem(api, kind, &names) {
+                    None => return Ok(device),
+                    Some(why) => skipped.push(format!("{}: {}", device, why)),
+                }
+            }
+            Err(if skipped.is_empty() { "no Vulkan device".into() } else { skipped.join("; ") })
+        })();
+        if let Ok(destroy) = get(instance, c"vkDestroyInstance") {
+            std::mem::transmute::<*const c_void, DestroyInstance>(destroy)(instance, null());
+        }
+        result
+    }
+}
+
+/// After the game ran with DXVK: None when DXVK got to show frames, otherwise why the start is taken as failed (its
+/// first error line, or no log at all: the DLL never loaded or the game ended before drawing anything).
+#[cfg(any(windows, test))]
+fn dxvk_failure(dxvk_log: Option<&str>) -> Option<String> {
+    let Some(text) = dxvk_log else { return Some("DXVK wrote no log".into()) };
+    if text.contains(DXVK_PRESENTING) {
+        return None;
+    }
+    Some(text.lines().find(|l| l.starts_with("err:")).map(|l| l.trim().to_string()).unwrap_or_else(|| "DXVK never showed a frame".into()))
+}
+
+#[cfg(windows)]
+const DXVK_FAILED: &str = "El juego no pudo abrirse con Vulkan (DXVK) en este equipo. Desactivamos la opción «Vulkan (DXVK)» en \
+Opciones, así que la próxima vez se abrirá con DirectX 9. Pulsa JUGAR otra vez.";
+
+/// Which d3d9.dll Proton put in the prefix for the 32-bit game: DXVK (Vulkan), as expected, or Wine's own WineD3D
+/// (PROTON_USE_WINED3D, or a broken prefix).
+#[cfg(not(windows))]
+fn prefix_d3d9(prefix: &Path) -> String {
+    let file = prefix.join("drive_c").join("windows").join("syswow64").join("d3d9.dll");
+    let kind = std::fs::read(&file).map(|b| d3d9_kind(&b).to_string()).unwrap_or_else(|e| format!("unreadable ({})", e));
+    let wined3d = std::env::var("PROTON_USE_WINED3D").map(|v| format!(", PROTON_USE_WINED3D={}", v)).unwrap_or_default();
+    format!("{} ({}){}", kind, file.display(), wined3d)
+}
+
+#[cfg(not(windows))]
+fn d3d9_kind(dll: &[u8]) -> &'static str {
+    let has = |s: &[u8]| dll.windows(s.len()).any(|w| w == s);
+    if has(b"Wine builtin DLL") {
+        "WineD3D (Wine's own d3d9, not DXVK)"
+    } else if has(b"dxvk") {
+        "DXVK (Vulkan)"
+    } else {
+        "unknown d3d9.dll"
+    }
+}
+
 // ---- the game ----
 
 pub struct PlayOptions {
@@ -554,6 +842,8 @@ pub struct PlayOptions {
     pub height: u32,
     pub windowed: bool,
     pub client: Option<ClientMods>, // None: client improvements off
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub dxvk: bool,                 // "Vulkan (DXVK)"; Windows only, Linux always has Proton's
 }
 
 /// The game reads its resolution from GraphicSettings.ini in its folder (DisplayWidth, DisplayHeight, Windowed).
@@ -619,7 +909,10 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
         return Err(format!("No se encontró el juego en:\n{}", game_dir.join(GAME_EXE).display()));
     }
     set_resolution(game_dir, o);
-    set_client_mods(if o.sync { a.get(3).copied() } else { None }, game_dir, o.client, progress);
+    let vault_key = if o.sync { a.get(3).copied() } else { None };
+    set_client_mods(vault_key, game_dir, o.client, progress);
+    #[cfg(windows)]
+    set_dxvk(vault_key, game_dir, o.dxvk, progress);
     run_game(game_dir, &format!("{}.{}", a[1], a[2]), progress, playing)
 }
 
@@ -635,13 +928,18 @@ fn dx_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("GRP_DX_CHECK") {
         return PathBuf::from(dir);
     }
-    let windows = std::env::var_os("WINDIR").or_else(|| std::env::var_os("SystemRoot")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+    let windows = windows_dir();
     let wow = windows.join("SysWOW64");
     if wow.is_dir() {
         wow
     } else {
         windows.join("System32")
     }
+}
+
+#[cfg(windows)]
+fn windows_dir() -> PathBuf {
+    std::env::var_os("WINDIR").or_else(|| std::env::var_os("SystemRoot")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"))
 }
 
 /// Installs the DirectX 9 runtime from the game folder's DXRedist when one of DX_DLLS is missing: DXSETUP.exe /silent,
@@ -724,6 +1022,11 @@ fn run_elevated(exe: &Path, args: &str) -> Result<u32, u32> {
 #[cfg(windows)]
 pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
     ensure_directx(game_dir, progress)?;
+    let dxvk = game_dir.join(DXVK_DLL).is_file();
+    let dxvk_log = game_dir.join(DXVK_LOG);
+    if dxvk {
+        let _ = std::fs::remove_file(&dxvk_log); // only this run's log counts
+    }
     crate::pipe::start(session.to_string());
     std::thread::sleep(Duration::from_millis(500));
     progress("Abriendo el juego...", -1.0);
@@ -740,11 +1043,20 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
             log(&format!("game start failed: {}", e));
             format!("No se pudo abrir el juego: {}", e)
         })?;
-    log(&format!("game started, pid {}", child.id()));
+    log(&format!("game started, pid {}, on {}", child.id(), if dxvk { "Vulkan (DXVK)" } else { "Direct3D 9" }));
     progress("Jugando. Esta ventana vuelve cuando cierres el juego.", -1.0);
     playing();
     let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     log(&format!("game exited, code {}", code));
+    if dxvk {
+        let text = std::fs::read(&dxvk_log).ok().map(|b| String::from_utf8_lossy(&b).into_owned());
+        if let Some(why) = dxvk_failure(text.as_deref()) {
+            log(&format!("dxvk failed ({}): switched off, the next start uses Direct3D 9", why));
+            remove_files("dxvk failed", &dxvk_files(game_dir));
+            save_settings(&[("dxvk", "0".into())]);
+            return Err(DXVK_FAILED.into());
+        }
+    }
     Ok(())
 }
 
@@ -797,6 +1109,7 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
         code
     });
     log(&format!("umu-run exited, code {}", code));
+    log(&format!("d3d9 in the prefix: {}", prefix_d3d9(&prefix)));
     Ok(())
 }
 
@@ -822,5 +1135,50 @@ fn fullscreen_on_hyprland(running: &std::sync::atomic::AtomicBool) {
             let done = ok(hyprctl(&["dispatch", &lua])) || ok(hyprctl(&["--batch", &classic]));
             log(&format!("hyprland fullscreen {}: {}", address, if done { "ok" } else { "failed" }));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn dxvk_takes_a_vulkan_1_3_gpu_with_its_extensions() {
+        assert_eq!(dxvk_device_problem(VK_API_1_3 + 280, 2, &names(&DXVK_EXTENSIONS)), None);
+    }
+
+    #[test]
+    fn dxvk_skips_old_drivers_software_renderers_and_missing_extensions() {
+        let all = names(&DXVK_EXTENSIONS);
+        assert_eq!(dxvk_device_problem((1 << 22) | (2 << 12) | 203, 2, &all).unwrap(), "Vulkan 1.2.203, DXVK needs 1.3");
+        assert_eq!(dxvk_device_problem(VK_API_1_3, VK_DEVICE_TYPE_CPU, &all).unwrap(), "software renderer");
+        let without = names(&["VK_KHR_swapchain", "VK_EXT_robustness2", "VK_KHR_maintenance5", "VK_KHR_load_store_op_none", "VK_EXT_depth_clip_enable"]);
+        assert_eq!(dxvk_device_problem(VK_API_1_3, 1, &without).unwrap(), "no VK_KHR_maintenance6");
+    }
+
+    #[test]
+    fn a_run_counts_as_working_once_dxvk_presented() {
+        let log = "info:  DXVK: v3.1.1\ninfo:  Presenter: Actual swapchain properties:\ninfo:    Format:       VK_FORMAT_B8G8R8A8_UNORM\n";
+        assert_eq!(dxvk_failure(Some(log)), None);
+    }
+
+    #[test]
+    fn a_run_without_a_frame_counts_as_failed() {
+        assert_eq!(dxvk_failure(None).unwrap(), "DXVK wrote no log");
+        let log = "info:  Game: GhostReconPhantoms.exe\ninfo:  DXVK: v3.1.1\nerr:   Failed to load vulkan-1 library.\n";
+        assert_eq!(dxvk_failure(Some(log)).unwrap(), "err:   Failed to load vulkan-1 library.");
+        assert_eq!(dxvk_failure(Some("info:  DXVK: v3.1.1\n")).unwrap(), "DXVK never showed a frame");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn tells_dxvk_from_wined3d() {
+        assert_eq!(d3d9_kind(b"MZ\x90\0Wine builtin DLL\0..."), "WineD3D (Wine's own d3d9, not DXVK)");
+        assert_eq!(d3d9_kind(b"MZ\x90\0...dxvk-cache..."), "DXVK (Vulkan)");
+        assert_eq!(d3d9_kind(b"MZ\x90\0"), "unknown d3d9.dll");
     }
 }

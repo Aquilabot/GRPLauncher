@@ -3,7 +3,8 @@
 # Builds the vault: the game files players download through the launcher. Copies the game folder to the stage
 # folder without what does not belong in it (logs, crash reports, per-player state, every Phoenix file:
 # version.dll, YetiIniEditor.exe, Yeti.ini.enc, and our client improvements: version.dll, grp-client.ini and its
-# log, which the launcher adds from vault/client/ only when the player has them on), writes manifest.txt, and with
+# log, and DXVK: d3d9.dll, its licence and log, which the launcher adds from vault/client/ only when the player has
+# them on), writes manifest.txt, and with
 # a host uploads both to ~/grp/vault.
 # manifest.txt: first line "vault <number>" (seconds since 1970 at build time), then one line per file:
 #   <f|d> <sha256> <size> <path>      f = must match;  d = settings the player may change: only fetched when missing
@@ -12,7 +13,8 @@ game="$1"; stage="$2"; host="${3:-}"
 mkdir -p "$stage/files"
 rsync -a --delete --exclude='/Logs/' --exclude='/BloombergReports/' --exclude='/version.dll*' --exclude='/YetiIniEditor.exe' \
   --exclude='/Yeti.ini.enc*' --exclude='*.bak' --exclude='/YetiCapsError.txt' --exclude='/gro.cache.ucc' \
-  --exclude='/SplashCounter.ini' --exclude='/grp-client.*' "$game/" "$stage/files/"
+  --exclude='/SplashCounter.ini' --exclude='/grp-client.*' --exclude='/d3d9.dll*' --exclude='/DXVK-LICENSE.txt' \
+  --exclude='/*_d3d9.log' "$game/" "$stage/files/"
 ( cd "$stage/files"
   echo "vault $(date +%s)"
   find . -type f -printf '%P\n' | LC_ALL=C sort | while IFS= read -r p; do

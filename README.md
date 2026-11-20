@@ -55,6 +55,28 @@ differ, downloads to `version.dll.part` and moves it into place only when size a
 logged and the game starts with the DLL it had, or none. Publishing a new DLL is uploading `version.dll`, then
 `version.txt`.
 
+## Vulkan (DXVK)
+
+"Vulkan (DXVK)" in Opciones, on by default on Windows: DXVK's 32-bit `d3d9.dll` (release 3.1.1, the version Proton
+runs the game with on Linux) in the game folder next to our `version.dll`, so the game draws through Vulkan, with
+DXVK's licence beside it (`DXVK-LICENSE.txt`, from `third-party/`). Kept in `settings.txt` as `dxvk` (`0` = off).
+Switched off, or on a machine where DXVK cannot run, the launcher deletes both and the game uses Direct3D 9.
+
+- **Vulkan check, before each start:** the 32-bit Vulkan loader (`SysWOW64\vulkan-1.dll`) must exist, and
+  `GRPLauncher.exe --vulkan-check`, run as a child process so a broken driver or layer cannot take the launcher down
+  (killed after 20 s), must find a device DXVK would take: Vulkan 1.3, not a software renderer, with the extensions
+  DXVK 3.1.1 requires (`VK_KHR_swapchain`, `VK_EXT_robustness2`, `VK_KHR_maintenance5`, `VK_KHR_maintenance6`,
+  `VK_KHR_load_store_op_none`, `VK_EXT_depth_clip_enable`). It prints `ok <device>` or `no <why>`; the launcher logs
+  either. `GRP_VULKAN_CHECK=pass|fail` skips it (tests).
+- **After each game with DXVK:** DXVK writes `GhostReconPhantoms_d3d9.log` in the game folder (cleared before each
+  start). Without its "Presenter: Actual swapchain properties" line, DXVK never showed a frame: the launcher deletes
+  the DLL, saves `dxvk=0`, logs the first `err:` line and tells the player to press JUGAR again (DirectX 9 then).
+- The DLL is published like ours: `client/d3d9.dll` and `client/d3d9.txt` (`<sha256> <size>`) in the vault, fetched
+  whole and checked; `make-vault.sh` keeps the DXVK files out of the manifest.
+- Linux: nothing is placed. Proton already puts its DXVK in the prefix; the option shows as on and cannot be
+  changed, and after each game the log says which `d3d9.dll` the prefix had (`DXVK (Vulkan)` or `WineD3D`, which
+  means `PROTON_USE_WINED3D` or a broken prefix).
+
 ## Release notes
 
 The main window shows what changed on the server, in the launcher and in the game, between Opciones and JUGAR ("Novedades").

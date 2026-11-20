@@ -45,6 +45,11 @@ OPCIONES
   carpeta del juego. Con él, Opciones > Vídeo del juego ofrece resoluciones de más de 1920 x 1200 y el
   juego pasa de 60 FPS. El límite de FPS se elige al lado: "Automático" usa la frecuencia de tu monitor
   (hasta 240). Si las desactivas, el launcher borra ese archivo y el juego queda como el original.
+- Vulkan (DXVK) (activado por defecto): el juego dibuja con Vulkan a través de DXVK, como en Linux. El
+  launcher pone d3d9.dll de DXVK en la carpeta del juego (con su licencia, DXVK-LICENSE.txt) solo si tu
+  tarjeta gráfica tiene Vulkan 1.3; si no, el juego usa DirectX 9 como siempre. Si el juego no llega a
+  abrirse con Vulkan, el launcher desactiva la opción solo, te lo dice y la próxima vez abre con DirectX 9.
+  Puedes volver a activarla cuando quieras.
 
 El launcher guarda tu nickname y tus opciones (nunca la contraseña) en %APPDATA%\GRPLauncher, junto con
 un registro (launcher.log) que sirve si algo falla: mándalo si te piden ayuda.

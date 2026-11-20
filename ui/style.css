@@ -21,6 +21,7 @@ h1 { margin: 0; font-size: 19px; letter-spacing: 1.5px; text-transform: uppercas
 form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 label { color: var(--muted); font-size: 12px; margin: 10px 0 4px; display: block; }
 .hint { opacity: .75; }
+#dxvkNote { color: var(--muted); font-size: 12px; }
 input:not([type=checkbox]), select {
   width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line);
   padding: 9px 10px; font: inherit; outline: none; border-radius: 2px; user-select: text;

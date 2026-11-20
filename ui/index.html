@@ -47,6 +47,11 @@
         <label class="check tight"><input id="clientmods" type="checkbox"> Activadas</label>
         <select id="maxfps"></select>
       </div>
+      <label for="dxvk">Vulkan (DXVK)</label>
+      <div class="row" id="dxvkRow" title="El juego dibuja con Vulkan a través de DXVK, como en Linux. Si tu tarjeta gráfica no tiene Vulkan 1.3 o el juego no abre así, se usa DirectX 9.">
+        <label class="check tight"><input id="dxvk" type="checkbox"> Activado</label>
+        <span class="hint" id="dxvkNote">Si tu tarjeta no tiene Vulkan, el juego usa DirectX 9.</span>
+      </div>
     </details>
 
     <section id="notes" hidden>
