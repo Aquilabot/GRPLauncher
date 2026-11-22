@@ -6,8 +6,8 @@ se actualiza solo.
 
 PRIMERA VEZ
 1. Descomprime esta carpeta donde quieras (por ejemplo en Documentos) y abre GRPLauncher.exe.
-2. Marca "Crear cuenta nueva", elige tu nickname (3 a 16 letras, números, - o _), una contraseña de 6
-   caracteres o más y escribe el código de invitación que te pasaron.
+2. Marca "Crear cuenta nueva", elige tu nickname (3 a 16 letras, números, - o _) y una contraseña de 6
+   caracteres o más.
 3. Pulsa CREAR CUENTA Y JUGAR. La primera vez descarga el juego (unos 4 GB). Si ya lo tenías instalado
    con el launcher de Phoenix, copia los archivos de ahí y tarda mucho menos.
 

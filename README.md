@@ -12,7 +12,7 @@ plain HTML/JS in `ui/`, the work is Rust in `src-tauri/src/`.
 - `pipe.rs`: the game's launcher protocol on `\\.\pipe\Ghost_Recon_Phantoms`. The game signs in as
   `<name>.<session token>`.
 - `main.rs`: the Tauri commands for the window, and the mode without a window used in tests:
-  `GRPLauncher.exe --user N --password P [--invite C] [--gamedir <folder>] [--nosync]`.
+  `GRPLauncher.exe --user N --password P [--create] [--invite C] [--gamedir <folder>] [--nosync]`.
 - `tools/make-vault.sh`: builds the vault (the game files without logs, crash reports or any Phoenix file) and its
   manifest, and uploads them.
 - Server side: `GRPBackendWV` (`QuazalWV/Accounts2016.cs`, `GROBackendWV/Server/AccountServer.cs`); on the host,

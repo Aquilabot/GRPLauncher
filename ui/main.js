@@ -54,7 +54,8 @@ function setBusy(busy) {
 }
 
 $('create').addEventListener('change', () => {
-  $('inviteRow').hidden = !$('create').checked;
+  $('inviteRow').hidden = true;
+  $('invite').value = '';
   $('play').textContent = $('create').checked ? 'CREAR CUENTA Y JUGAR' : 'JUGAR';
 });
 
@@ -104,12 +105,12 @@ $('form').addEventListener('submit', async (ev) => {
   const name = $('name').value.trim(), password = $('password').value, creating = $('create').checked, invite = $('invite').value.trim();
   if (!name || !password) return setStatus('Escribe tu nickname y tu contraseña.');
   if (creating && password.length < 6) return setStatus('La contraseña debe tener al menos 6 caracteres.');
-  if (creating && !invite) return setStatus('Escribe el código de invitación.');
+  if (creating && !$('inviteRow').hidden && !invite) return setStatus('Escribe el código de invitación.');
   const res = $('resolution').value;
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus('Conectando...');
-  await invoke('play', { args: { name, password, invite: creating ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value, dxvk: $('dxvk').checked } });
+  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value, dxvk: $('dxvk').checked } });
 });
 
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
@@ -176,8 +177,13 @@ listen('playing', () => { if (tauri) tauri.window.getCurrentWindow().minimize();
 listen('done', (e) => {
   setBusy(false);
   setStatus(e.payload.error || '');
-  $('password').value = '';
-  if (!e.payload.error) { $('create').checked = false; $('create').dispatchEvent(new Event('change')); }
+  if (e.payload.need_invite) {
+    $('inviteRow').hidden = false;
+    $('invite').focus();
+  } else {
+    $('password').value = '';
+    if (!e.payload.error) { $('create').checked = false; $('create').dispatchEvent(new Event('change')); }
+  }
   if (tauri) { const w = tauri.window.getCurrentWindow(); w.unminimize(); w.setFocus(); }
   loadNotes(); // the server may have changed while the player was in the game
   invoke('get_state').then((s) => showDxvk(s.dxvk)); // a game that failed on Vulkan turned it off

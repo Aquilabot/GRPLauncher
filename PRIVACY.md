@@ -5,7 +5,7 @@ only when you use it:
 
 - **Signing in or creating an account** (`POST /login`, `POST /register`): it sends the nickname you typed, a value
   derived from your password (PBKDF2-HMAC-SHA1 of the password with the nickname, 50 000 rounds; the password
-  itself is never sent or stored), the launcher's version number and, when creating an account, the invitation
+  itself is never sent or stored), the launcher's version number and, only when an invitation code is entered, that
   code. The server answers with a session token valid for 12 hours, which the launcher hands to the game.
 - **Keeping itself and the game up to date**: it downloads `version.txt` and, when there is a newer launcher, the
   new program; it downloads the list of game files and the files that are missing or different, and, with

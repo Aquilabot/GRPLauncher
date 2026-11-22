@@ -3,7 +3,7 @@
 // the game asks its launcher over \\.\pipe\Ghost_Recon_Phantoms.
 //
 //   GRPLauncher.exe                                   the window
-//   GRPLauncher.exe --user N --password P [--invite C] [--gamedir <folder>] [--nosync]   no window (tests)
+//   GRPLauncher.exe --user N --password P [--create] [--invite C] [--gamedir <folder>] [--nosync]   no window (tests)
 //   GRPLauncher.exe --user N --password P --reset <code>   sets the new password P with an admin's code, no window (tests)
 //   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
 //   GRPLauncher.exe --vulkan-check                    prints "ok <device>" or "no <why>": can DXVK run here (Windows)
@@ -64,6 +64,8 @@ fn get_state() -> State {
 struct PlayArgs {
     name: String,
     password: String,
+    #[serde(default)]
+    create: bool,
     invite: Option<String>,
     gamedir: String,
     resolution: String,
@@ -84,6 +86,7 @@ struct Status {
 #[derive(Serialize, Clone)]
 struct Done {
     error: Option<String>,
+    need_invite: bool,
 }
 
 // Runs in its own thread; the window hears about it through the events "status", "playing" and "done".
@@ -104,11 +107,14 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             let _ = progress_app.emit("status", Status { text: text.to_string(), fraction });
         };
         let mut error = None;
-        if let Some(invite) = args.invite.as_deref().filter(|i| !i.is_empty()) {
+        let mut need_invite = false;
+        let invite = args.invite.as_deref().map(str::trim).unwrap_or("");
+        if args.create || !invite.is_empty() {
             progress("Creando la cuenta...", -1.0);
             let r = core::register(invite, &args.name, &args.password);
             core::log(&format!("register {}: {}", args.name, r));
             if r != "OK" {
+                need_invite = r == "ERR invite";
                 error = Some(core::explain(&r));
             }
         }
@@ -121,7 +127,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             })
             .err();
         }
-        let _ = app.emit("done", Done { error });
+        let _ = app.emit("done", Done { error, need_invite });
     });
 }
 
@@ -223,8 +229,9 @@ fn main() {
             core::log(&format!("password reset {}: {}", name, r));
             std::process::exit(if r == "OK" { 0 } else { 2 });
         }
-        if let Some(invite) = arg(&args, "--invite") {
-            let r = core::register(&invite, &name, &pw);
+        let invite = arg(&args, "--invite");
+        if args.iter().any(|a| a == "--create") || invite.is_some() {
+            let r = core::register(invite.as_deref().unwrap_or(""), &name, &pw);
             core::log(&format!("register {}: {}", name, r));
             if r != "OK" {
                 std::process::exit(2);

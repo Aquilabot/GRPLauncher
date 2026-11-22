@@ -179,7 +179,13 @@ fn post(path: &str, form: &str) -> String {
 }
 
 pub fn register(invite: &str, name: &str, password: &str) -> String {
-    post("/register", &format!("invite={}&name={}&secret={}", escape(invite), escape(name), secret(name, password)))
+    let invite = invite.trim();
+    let body = if invite.is_empty() {
+        format!("name={}&secret={}", escape(name), secret(name, password))
+    } else {
+        format!("invite={}&name={}&secret={}", escape(invite), escape(name), secret(name, password))
+    };
+    post("/register", &body)
 }
 
 fn login(name: &str, password: &str) -> String {
@@ -224,7 +230,7 @@ pub fn explain(answer: &str) -> String {
     match answer {
         "ERR code" => "El código no es válido, ya se usó o caducó. Pide uno nuevo a un administrador.".into(),
         a if a.starts_with("ERR banned ") => banned(&a[11..]),
-        "ERR invite" => "El código de invitación no es válido o ya se usó.".into(),
+        "ERR invite" => "Esta cuenta requiere un código de invitación válido o el código ya se usó.".into(),
         "ERR name" => "El nickname debe tener de 3 a 16 caracteres: letras, números, guion y guion bajo.".into(),
         "ERR taken" => "Ese nickname ya está en uso.".into(),
         "ERR login" => "Nickname o contraseña incorrectos.".into(),
