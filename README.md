@@ -24,7 +24,7 @@
 2. Extract the entire folder anywhere on your PC (do not run it from inside the `.zip`).
 3. Open **`GRPLauncher.exe`**, check **"Crear cuenta nueva"**, choose a nickname and password, and click **CREAR CUENTA Y JUGAR**.
    - Registration is free — no invitation code required.
-   - On first launch, the launcher downloads the game (~4 GB) and installs DirectX 9 if missing. If you already have a Phoenix installation, it copies matching files automatically to save time.
+   - On first launch, the launcher downloads the game (~4 GB) and installs DirectX 9 if missing.
    - Future updates to both the launcher and the game happen automatically.
 
 > **¿Hablas español?** Dentro del `.zip` encontrarás [`LEEME.txt`](LEEME.txt) con las instrucciones completas de instalación, opciones y solución de problemas.
@@ -81,7 +81,7 @@ Tauri 2 application: the window is plain HTML/JS in `ui/`, and the backend logic
 - `pipe.rs`: the game's launcher protocol on `\\.\pipe\Ghost_Recon_Phantoms`. The game signs in as `<name>.<session token>`.
 - `main.rs`: the Tauri commands for the window, and the headless CLI mode used in tests:
   `GRPLauncher.exe --user N --password P [--create] [--invite C] [--gamedir <folder>] [--nosync]`.
-- `tools/make-vault.sh`: builds the vault (the game files without logs, crash reports, or any Phoenix file) and its manifest, and uploads them.
+- `tools/make-vault.sh`: builds the vault (clean game files without logs, crash reports, or third-party launcher files) and its manifest, and uploads them.
 - Server side: `GRPBackendWV` (`QuazalWV/Accounts2016.cs`, `GROBackendWV/Server/AccountServer.cs`); on the host, nginx fronts the account service and serves `/launcher/` and `/files/<key>/`.
 
 The password never leaves the machine: what is sent is `PBKDF2-HMAC-SHA1(password, "grp2016:" + lowercase name)`, 50 000 rounds, 32 bytes, hex. Since version 4 the connection to the community server is HTTPS (`https://grp.limacashout.pro`, certificates checked against the system store); `accounturl` in `launcher.ini` points it somewhere else, and a server on your own machine is still reached in plain HTTP.
@@ -93,7 +93,7 @@ The program's version resource names the publisher and copyright (`bundle` in `t
 - **Windows (cross-compiled from Linux):** `./build.sh` (uses `cargo-xwin`); `./build.sh publish` also uploads it to the server, and every installed launcher replaces itself on its next start. Raise `VERSION` in `src-tauri/src/core.rs` for each release.
 - **GitHub Releases:** pushing a semver tag (`X.Y.Z`) triggers `.github/workflows/release.yml` on `windows-latest`, builds `GRPLauncher.exe`, packages `GRPLauncher.zip`, and publishes the GitHub Release automatically.
 - **Windows runtime requirements:** the window needs the WebView2 runtime (part of Windows 11 and most Windows 10). The game needs the 32-bit DirectX 9 runtime of June 2010 (`d3dx9_43.dll`, `xinput1_3.dll`), which Windows 10 and 11 lack. Before starting the game, when either DLL is missing from `SysWOW64` (`System32` on 32-bit Windows), the launcher runs `DXRedist\DXSETUP.exe /silent` from the game folder elevated (one UAC prompt) and waits; a declined prompt or a failed setup stops there with instructions. `GRP_DX_CHECK=<folder>` looks for the DLLs in that folder instead (an empty one forces the install, for tests). Wine prefixes carry their own copies, so under Wine nothing runs. DXSETUP probes for .NET to decide about Managed DirectX, which makes Windows offer .NET Framework 3.5; the game does not need it.
-- **Linux:** `cargo build --release` in `src-tauri/` gives a native launcher (needs `webkit2gtk-4.1` and `umu-run`). It signs in and prepares the game folder itself, then runs the game inside Wine through `umu-run`, with the Windows build (fetched from the server) as the helper that answers the game's pipe (`--session`). `launcher.ini` takes three more keys there: `prefix` (Wine prefix), `proton` (`PROTONPATH`), and `phoenixdir` (an existing copy of the game to take identical files from). Settings and log go to `~/.config/GRPLauncher`, the game to `~/.local/share/GRPLauncher`.
+- **Linux:** `cargo build --release` in `src-tauri/` gives a native launcher (needs `webkit2gtk-4.1` and `umu-run`). It signs in and prepares the game folder itself, then runs the game inside Wine through `umu-run`, with the Windows build (fetched from the server) as the helper that answers the game's pipe (`--session`). `launcher.ini` takes two more keys there: `prefix` (Wine prefix) and `proton` (`PROTONPATH`). Settings and log go to `~/.config/GRPLauncher`, the game to `~/.local/share/GRPLauncher`.
 
 ### Client improvements
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make-vault.sh <game folder> <stage folder> [ssh host]
 # Builds the vault: the game files players download through the launcher. Copies the game folder to the stage
-# folder without what does not belong in it (logs, crash reports, per-player state, every Phoenix file:
+# folder without what does not belong in it (logs, crash reports, per-player state, third-party launcher files:
 # version.dll, YetiIniEditor.exe, Yeti.ini.enc, and our client improvements: version.dll, grp-client.ini and its
 # log, and DXVK: d3d9.dll, its licence and log, which the launcher adds from vault/client/ only when the player has
 # them on), writes manifest.txt, and with

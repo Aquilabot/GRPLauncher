@@ -19,11 +19,9 @@ pub struct Config {
     pub port: u16,            // UDP, lobby
     pub access_key: String,
     pub language: String,
-    // Linux only: the Wine prefix the game runs in, the Proton umu-run uses, and a folder with an existing copy
-    // of the game to take identical files from (on Windows that is Phoenix's install folder).
+    // Linux only: the Wine prefix the game runs in and the Proton umu-run uses.
     pub prefix: String,
     pub proton: String,
-    pub phoenix_dir: String,
 }
 
 pub fn read_pairs(file: &Path) -> HashMap<String, String> {
@@ -60,7 +58,6 @@ pub fn config() -> &'static Config {
             language: get("language", "english"),
             prefix: get("prefix", ""),
             proton: get("proton", "GE-Proton"),
-            phoenix_dir: get("phoenixdir", ""),
         }
     })
 }
@@ -110,15 +107,6 @@ pub fn default_game_dir() -> PathBuf {
     return env_dir("LOCALAPPDATA").join("GRP").join("Ghost Recon Phantoms");
     #[cfg(not(windows))]
     return share_dir().join("Ghost Recon Phantoms");
-}
-
-/// An existing copy of the game (Phoenix's install on Windows; launcher.ini "phoenixdir" on Linux): identical files
-/// are copied from there instead of downloaded. Never written to.
-fn phoenix_game_dir() -> PathBuf {
-    if !config().phoenix_dir.is_empty() {
-        return PathBuf::from(&config().phoenix_dir);
-    }
-    env_dir("LOCALAPPDATA").join("Phoenix Network").join("Ghost Recon Phantoms")
 }
 
 /// The community server's own address and the encrypted address of its account service. Launchers up to version 3
@@ -443,9 +431,7 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
     }
     let total: u64 = need.iter().map(|e| e.size).sum();
     log(&format!("{} files to get, {} MB", need.len(), total >> 20));
-    let phoenix = phoenix_game_dir();
-    let use_phoenix = phoenix.is_dir() && std::fs::canonicalize(&phoenix).ok() != std::fs::canonicalize(game_dir).ok();
-    let (mut done, mut copied, mut fetched) = (0u64, 0u32, 0u32);
+    let (mut done, mut fetched) = (0u64, 0u32);
     let save_cache = |cache: &HashMap<String, String>| {
         let text: String = cache.iter().map(|(k, v)| format!("{}\t{}\n", k, v)).collect();
         let _ = std::fs::write(&cache_file, text);
@@ -454,40 +440,23 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
         let file = local(e);
         let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let fraction = |done: u64| if total == 0 { 1.0 } else { done as f64 / total as f64 };
-        let other = phoenix.join(e.path.replace('/', std::path::MAIN_SEPARATOR_STR));
-        let mut got = false;
-        if use_phoenix && std::fs::metadata(&other).map(|m| m.len()).ok() == Some(e.size) {
-            progress(&format!("Copiando {} de la instalación de Phoenix...", name), fraction(done));
-            if sha256_file(&other).map(|h| h == e.sha).unwrap_or(false) {
-                if let Some(dir) = file.parent() {
-                    let _ = std::fs::create_dir_all(dir);
-                }
-                if std::fs::copy(&other, &file).is_ok() {
-                    done += e.size;
-                    copied += 1;
-                    got = true;
-                }
-            }
+        let url = format!("{}files/{}", base, e.path.split('/').map(escape).collect::<Vec<_>>().join("/"));
+        let start = done;
+        let mut step = |n: u64| {
+            done += n;
+            progress(&format!("Descargando {}  ({} de {} MB)", name, done >> 20, total >> 20), fraction(done));
+        };
+        if let Err(err) = download(&url, &file, e.size, &e.sha, &mut step) {
+            save_cache(&cache);
+            log(&format!("sync failed: {}", err));
+            return Err(err);
         }
-        if !got {
-            let url = format!("{}files/{}", base, e.path.split('/').map(escape).collect::<Vec<_>>().join("/"));
-            let start = done;
-            let mut step = |n: u64| {
-                done += n;
-                progress(&format!("Descargando {}  ({} de {} MB)", name, done >> 20, total >> 20), fraction(done));
-            };
-            if let Err(err) = download(&url, &file, e.size, &e.sha, &mut step) {
-                save_cache(&cache);
-                log(&format!("sync failed: {}", err));
-                return Err(err);
-            }
-            done = start + e.size;
-            fetched += 1;
-        }
+        done = start + e.size;
+        fetched += 1;
         cache.insert(e.path.clone(), format!("{}|{}|{}", e.size, mtime(&file), e.sha));
     }
     save_cache(&cache);
-    log(&format!("game folder ready: {} copied from Phoenix, {} downloaded", copied, fetched));
+    log(&format!("game folder ready: {} downloaded", fetched));
     Ok(())
 }
 
