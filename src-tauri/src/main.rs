@@ -180,7 +180,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         let mut need_invite = false;
         let invite = args.invite.as_deref().map(str::trim).unwrap_or("");
         if args.create || !invite.is_empty() {
-            progress(core::tr("Creando la cuenta...", "Creating the account..."), -1.0);
+            progress(core::tr("Creando cuenta...", "Creating account..."), -1.0);
             let r = core::register(invite, &args.name, &args.password);
             core::log(&format!("register {}: {}", args.name, r));
             if r != "OK" {
@@ -237,7 +237,7 @@ fn mark_notes_seen(id: u32) {
 #[tauri::command]
 fn pick_folder(app: tauri::AppHandle, current: String) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
-    let mut d = app.dialog().file().set_title(core::tr("Carpeta donde está o se instalará el juego (unos 4 GB)", "Folder where the game is, or will be installed (about 4 GB)"));
+    let mut d = app.dialog().file().set_title(core::tr("Elige la carpeta de instalación del juego (~4 GB)", "Choose the game installation folder (~4 GB)"));
     if std::path::Path::new(&current).is_dir() {
         d = d.set_directory(&current);
     }
@@ -272,7 +272,7 @@ fn main() {
     #[cfg(windows)]
     if inside_temp_folder() {
         core::log("started from the temporary folder (inside a zip opened with WinRAR or Explorer): asked to extract it first");
-        let text: Vec<u16> = "GRP Launcher se abrió desde dentro del archivo .zip.\n\nPrimero extrae todo el contenido del .zip en una carpeta (por ejemplo en Documentos) y abre GRPLauncher.exe desde ahí.\n\nGRP Launcher was opened from inside the .zip file.\n\nExtract everything in the .zip to a folder first (Documents, for example) and open GRPLauncher.exe from there."
+        let text: Vec<u16> = "GRP Launcher se abrió directamente desde dentro del archivo .zip.\n\nPrimero descomprime todo el contenido en una carpeta (por ejemplo, en Documentos) y ejecuta GRPLauncher.exe desde ahí.\n\nGRP Launcher was opened directly from inside the .zip file.\n\nExtract all files to a folder first (e.g. Documents) and run GRPLauncher.exe from there."
             .encode_utf16()
             .chain(Some(0))
             .collect();

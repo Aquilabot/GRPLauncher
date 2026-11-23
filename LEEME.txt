@@ -41,20 +41,20 @@ AJUSTES (pestaña "Ajustes", arriba)
 - Carpeta del juego: dónde se instala. Por defecto, %LOCALAPPDATA%\GRP\Ghost Recon Phantoms.
 - Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en
   ventana.
-- Sensibilidad del ratón: escribe un valor exacto (sin pasos de 0,05 del deslizador del juego) o pulsa
-  "Calcular" para convertir desde cm por vuelta (360°) + DPI o desde otro juego (The Finals, CS2/Apex,
-  Valorant, Overwatch 2/CoD, Fortnite o Rainbow Six Siege). Vacío conserva la sensibilidad del juego.
+- Sensibilidad del ratón: escribe un valor exacto (sin saltos de 0,05 del deslizador del juego) o pulsa
+  "Calcular" para convertir desde cm por giro (360°) + DPI o desde otro juego (The Finals, CS2/Apex,
+  Valorant, Overwatch 2/CoD, Fortnite o Rainbow Six Siege). Déjalo vacío para usar el ajuste del juego.
 - Mejoras del cliente (activadas por defecto): el launcher pone un archivo nuestro, version.dll, en la
-  carpeta del juego. Con él, Opciones > Vídeo del juego ofrece resoluciones de más de 1920 x 1200, el juego pasa de
+  carpeta del juego. Con él, Opciones > Vídeo del juego ofrece resoluciones mayores a 1920 x 1200, el juego pasa de
   60 FPS, se elimina el límite de giro rápido del ratón por fotograma y puedes ajustar el campo de visión
   (FOV, de 70° a 110°), el escalado de sensibilidad por distancia focal y los multiplicadores al apuntar
-  (con mira y con telescópica). El límite de FPS se elige ahí mismo: "Automático" usa la frecuencia de tu monitor
-  (hasta 240). Si las desactivas, el launcher borra ese archivo y el juego queda como el original.
+  (con mira ADS y con telescópica). El límite de FPS se elige ahí mismo: "Automático" usa la frecuencia de tu monitor
+  (hasta 240). Si las desactivas, el launcher borra ese archivo y el juego queda original.
 - Vulkan (DXVK) (activado por defecto): el juego dibuja con Vulkan a través de DXVK, como en Linux. El
   launcher pone d3d9.dll de DXVK en la carpeta del juego (con su licencia, DXVK-LICENSE.txt) solo si tu
-  tarjeta gráfica tiene Vulkan 1.3; si no, el juego usa DirectX 9 como siempre. Si el juego no llega a
-  abrirse con Vulkan, el launcher desactiva la opción solo, te lo dice y la próxima vez abre con DirectX 9.
+  tarjeta gráfica soporta Vulkan 1.3; si no, el juego usa DirectX 9 como siempre. Si el juego falla al abrir
+  con Vulkan, el launcher desactiva la opción automáticamente, te avisa y la próxima vez abre con DirectX 9.
   Puedes volver a activarla cuando quieras.
 
-El launcher guarda tu nickname y tus opciones (nunca la contraseña) en %APPDATA%\GRPLauncher, junto con
+El launcher guarda tu nickname y tus ajustes (nunca la contraseña) en %APPDATA%\GRPLauncher, junto con
 un registro (launcher.log) que sirve si algo falla: mándalo si te piden ayuda.

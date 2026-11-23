@@ -17,60 +17,60 @@ const listen = tauri ? tauri.event.listen : async () => {};
 const TEXT = {
   es: {
     'nav.label': 'Secciones', 'nav.home': 'Inicio', 'nav.settings': 'Ajustes', 'lang.label': 'Idioma',
-    'server.name': 'Servidor de la comunidad', 'server.place': 'São Paulo · 60 Hz',
-    'notes.title': 'Novedades', 'notes.empty': 'Todavía no hay novedades publicadas.', 'notes.new1': '1 nueva', 'notes.newN': '{n} nuevas', 'notes.fresh': 'Nuevo',
+    'server.name': 'Servidor comunitario', 'server.place': 'São Paulo · 60 Hz',
+    'notes.title': 'Novedades', 'notes.empty': 'Aún no hay novedades.', 'notes.new1': '1 nueva', 'notes.newN': '{n} nuevas', 'notes.fresh': 'Nuevo',
     'tag.servidor': 'Servidor', 'tag.launcher': 'Launcher', 'tag.juego': 'Juego',
-    'set.game': 'Juego', 'set.gamedir': 'Carpeta del juego', 'set.browse': 'Buscar', 'set.gamedir.hint': 'Si el juego no está ahí, se descarga (unos 4 GB).',
-    'set.resolution': 'Resolución', 'set.windowed': 'En ventana', 'set.res.auto': 'Automática: la de tu pantalla ({w} × {h})',
-    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Activado', 'set.dxvk.hint': 'Si tu tarjeta no tiene Vulkan 1.3 o el juego no abre así, se usa DirectX 9.', 'set.dxvk.linux': 'En Linux el juego ya usa Vulkan con el DXVK de Proton.',
-    'set.mouse': 'Ratón', 'set.sens': 'Sensibilidad exacta', 'set.sens.placeholder': 'Sin cambios (la del juego)', 'set.calc': 'Calcular', 'set.calc.close': 'Cerrar',
-    'set.sens.hint': 'El valor que el juego usa por dentro, sin los pasos de 0,05 del menú. Vacío conserva el del juego.',
-    'calc.from': 'Convertir desde', 'calc.cm360': 'cm por vuelta (360°)', 'calc.dpi': 'DPI del ratón', 'calc.apply': 'Aplicar', 'calc.in': 'Sensibilidad en {game}',
-    'calc.empty': 'Escribe un valor para calcular.', 'calc.now': 'Ahora: {cm} cm por vuelta a {dpi} DPI', 'calc.result': 'En GRP: {v}',
-    'set.mods': 'Mejoras del cliente', 'set.mods.on': 'Activadas', 'set.mods.hint': 'Resoluciones de más de 1920 × 1200, más de 60 FPS, ratón sin tope de giro y los ajustes de abajo. Desactivadas, el juego queda como el original.',
-    'set.fov': 'Campo de visión', 'set.fov.hint': 'Horizontal, al caminar o correr (en 16:9). Las miras conservan su zoom.', 'set.fov.stock': 'Original 79°',
+    'set.game': 'Juego', 'set.gamedir': 'Carpeta del juego', 'set.browse': 'Examinar', 'set.gamedir.hint': 'Si el juego no está en esta carpeta, se descargará aquí (~4 GB).',
+    'set.resolution': 'Resolución', 'set.windowed': 'En ventana', 'set.res.auto': 'Automática ({w} × {h})',
+    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Activado', 'set.dxvk.hint': 'Si tu gráfica no soporta Vulkan 1.3 o el juego falla al abrir, vuelve a DirectX 9 automáticamente.', 'set.dxvk.linux': 'En Linux el juego ya usa Vulkan con el DXVK de Proton.',
+    'set.mouse': 'Ratón', 'set.sens': 'Sensibilidad exacta', 'set.sens.placeholder': 'Sin cambios (usa la del juego)', 'set.calc': 'Calcular', 'set.calc.close': 'Cerrar',
+    'set.sens.hint': 'Valor interno exacto, sin los saltos de 0,05 del menú. Déjalo vacío para usar el ajuste del juego.',
+    'calc.from': 'Convertir desde', 'calc.cm360': 'cm por giro (360°)', 'calc.dpi': 'DPI del ratón', 'calc.apply': 'Aplicar', 'calc.in': 'Sensibilidad en {game}',
+    'calc.empty': 'Escribe un valor para calcular.', 'calc.now': 'Actual: {cm} cm / 360° a {dpi} DPI', 'calc.result': 'En GRP: {v}',
+    'set.mods': 'Mejoras del cliente', 'set.mods.on': 'Activadas', 'set.mods.hint': 'Desbloquea resoluciones mayores a 1920 × 1200, más de 60 FPS, giro de ratón sin tope y los ajustes de abajo. Si lo desactivas, el juego queda original.',
+    'set.fov': 'Campo de visión (FOV)', 'set.fov.hint': 'Horizontal al caminar o correr (en 16:9). Las miras mantienen su zoom.', 'set.fov.stock': 'Original 79°',
     'cone.title': 'Campo de visión de {deg}° comparado con el original de 79°',
-    'set.maxfps': 'Límite de FPS', 'fps.auto': 'Automático (frecuencia del monitor)', 'fps.none': 'Sin límite',
-    'set.ads': 'Sensibilidad al apuntar', 'set.focal': 'Escalar por distancia focal', 'set.focal.hint': 'Mantiene la misma distancia de ratón por distancia en pantalla al apuntar, en lugar de la curva original del juego.', 'set.adsmult': 'Multiplicador con mira', 'set.scopemult': 'Multiplicador con telescópica',
+    'set.maxfps': 'Límite de FPS', 'fps.auto': 'Automático (Hz del monitor)', 'fps.none': 'Sin límite',
+    'set.ads': 'Sensibilidad al apuntar', 'set.focal': 'Escalar por distancia focal', 'set.focal.hint': 'Mantiene una sensación de puntería consistente al hacer zoom, en lugar de la curva original del juego.', 'set.adsmult': 'Multiplicador con mira (ADS)', 'set.scopemult': 'Multiplicador con telescópica',
     'acc.label': 'Cuenta', 'acc.login': 'Entrar', 'acc.create': 'Cuenta nueva', 'acc.name': 'Nickname', 'acc.password': 'Contraseña',
-    'acc.create.hint': 'Gratis y sin correo. La contraseña, de 6 caracteres o más.', 'acc.forgot': '¿Olvidaste tu contraseña?', 'acc.invite': 'Código de invitación',
+    'acc.create.hint': 'Gratis y sin correo. Contraseña de al menos 6 caracteres.', 'acc.forgot': '¿Olvidaste tu contraseña?', 'acc.invite': 'Código de invitación',
     'play': 'Jugar', 'play.create': 'Crear cuenta y jugar',
-    'reset.title': 'Cambiar la contraseña', 'reset.intro': 'Pide un código a un administrador en Discord. Sirve una sola vez y caduca en 24 horas.',
-    'reset.code': 'Código', 'reset.new': 'Contraseña nueva', 'reset.again': 'Repite la contraseña nueva', 'reset.go': 'Cambiar contraseña', 'reset.back': 'Volver',
+    'reset.title': 'Restablecer contraseña', 'reset.intro': 'Pide un código a un administrador en Discord. Es de un solo uso y caduca en 24 horas.',
+    'reset.code': 'Código', 'reset.new': 'Nueva contraseña', 'reset.again': 'Repite la contraseña', 'reset.go': 'Cambiar contraseña', 'reset.back': 'Volver',
     'links.label': 'Enlaces', 'links.status': 'Estado del servidor', 'links.source': 'Código fuente', 'links.support': 'Apoyar el servidor',
-    'legal': 'Proyecto de la comunidad, sin relación con Ubisoft.', 'version': 'Launcher {v}',
-    'msg.need': 'Escribe tu nickname y tu contraseña.', 'msg.short': 'La contraseña debe tener al menos 6 caracteres.', 'msg.invite': 'Escribe el código de invitación.',
-    'msg.connecting': 'Conectando...', 'msg.reset.need': 'Escribe tu nickname, el código y la contraseña nueva.', 'msg.reset.differ': 'Las dos contraseñas no coinciden.',
-    'msg.reset.busy': 'Cambiando la contraseña...', 'msg.reset.done': 'Contraseña cambiada. Ya puedes entrar con la nueva.',
+    'legal': 'Proyecto comunitario, sin afiliación con Ubisoft.', 'version': 'Launcher {v}',
+    'msg.need': 'Escribe tu nickname y contraseña.', 'msg.short': 'La contraseña debe tener al menos 6 caracteres.', 'msg.invite': 'Escribe el código de invitación.',
+    'msg.connecting': 'Conectando...', 'msg.reset.need': 'Completa tu nickname, el código y la nueva contraseña.', 'msg.reset.differ': 'Las contraseñas no coinciden.',
+    'msg.reset.busy': 'Cambiando contraseña...', 'msg.reset.done': 'Contraseña actualizada. Ya puedes iniciar sesión.',
     months: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
   },
   en: {
     'nav.label': 'Sections', 'nav.home': 'Home', 'nav.settings': 'Settings', 'lang.label': 'Language',
     'server.name': 'Community server', 'server.place': 'São Paulo · 60 Hz',
-    'notes.title': 'What changed', 'notes.empty': 'No release notes published yet.', 'notes.new1': '1 new', 'notes.newN': '{n} new', 'notes.fresh': 'New',
+    'notes.title': 'Release notes', 'notes.empty': 'No updates published yet.', 'notes.new1': '1 new', 'notes.newN': '{n} new', 'notes.fresh': 'New',
     'tag.servidor': 'Server', 'tag.launcher': 'Launcher', 'tag.juego': 'Game',
-    'set.game': 'Game', 'set.gamedir': 'Game folder', 'set.browse': 'Browse', 'set.gamedir.hint': 'If the game is not there, it is downloaded (about 4 GB).',
-    'set.resolution': 'Resolution', 'set.windowed': 'Windowed', 'set.res.auto': 'Automatic: your screen ({w} × {h})',
-    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'On', 'set.dxvk.hint': 'If your graphics card has no Vulkan 1.3, or the game does not open with it, DirectX 9 is used.', 'set.dxvk.linux': 'On Linux the game already runs on Vulkan through Proton’s DXVK.',
-    'set.mouse': 'Mouse', 'set.sens': 'Exact sensitivity', 'set.sens.placeholder': 'Unchanged (the game’s own)', 'set.calc': 'Convert', 'set.calc.close': 'Close',
-    'set.sens.hint': 'The value the game uses inside, without the 0.05 steps of its menu. Empty keeps the game’s own.',
-    'calc.from': 'Convert from', 'calc.cm360': 'cm per turn (360°)', 'calc.dpi': 'Mouse DPI', 'calc.apply': 'Apply', 'calc.in': 'Sensitivity in {game}',
-    'calc.empty': 'Type a value to convert.', 'calc.now': 'Now: {cm} cm per turn at {dpi} DPI', 'calc.result': 'In GRP: {v}',
-    'set.mods': 'Client improvements', 'set.mods.on': 'On', 'set.mods.hint': 'Resolutions above 1920 × 1200, more than 60 FPS, no turn-speed cap on the mouse, and the settings below. Off, the game is the original.',
-    'set.fov': 'Field of view', 'set.fov.hint': 'Horizontal, walking or running (at 16:9). Sights keep their zoom.', 'set.fov.stock': 'Original 79°',
-    'cone.title': 'A {deg}° field of view against the original 79°',
-    'set.maxfps': 'FPS limit', 'fps.auto': 'Automatic (the monitor’s refresh rate)', 'fps.none': 'No limit',
-    'set.ads': 'Sensitivity when aiming', 'set.focal': 'Scale by focal length', 'set.focal.hint': 'Keeps the same mouse travel per distance on screen when aiming, instead of the game’s original curve.', 'set.adsmult': 'Multiplier with a sight', 'set.scopemult': 'Multiplier with a scope',
+    'set.game': 'Game', 'set.gamedir': 'Game folder', 'set.browse': 'Browse', 'set.gamedir.hint': 'Downloads the game here if missing (~4 GB).',
+    'set.resolution': 'Resolution', 'set.windowed': 'Windowed', 'set.res.auto': 'Auto ({w} × {h})',
+    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Enabled', 'set.dxvk.hint': 'Automatically falls back to DirectX 9 if your GPU lacks Vulkan 1.3 or fails to launch.', 'set.dxvk.linux': 'On Linux, the game already runs on Vulkan through Proton’s DXVK.',
+    'set.mouse': 'Mouse', 'set.sens': 'Exact sensitivity', 'set.sens.placeholder': 'Default (in-game setting)', 'set.calc': 'Convert', 'set.calc.close': 'Close',
+    'set.sens.hint': 'Exact internal value, bypassing the 0.05 in-game slider steps. Leave blank to keep your in-game setting.',
+    'calc.from': 'Convert from', 'calc.cm360': 'cm / 360°', 'calc.dpi': 'Mouse DPI', 'calc.apply': 'Apply', 'calc.in': 'Sensitivity in {game}',
+    'calc.empty': 'Enter a value to convert.', 'calc.now': 'Current: {cm} cm / 360° at {dpi} DPI', 'calc.result': 'In GRP: {v}',
+    'set.mods': 'Client improvements', 'set.mods.on': 'Enabled', 'set.mods.hint': 'Unlocks resolutions above 1920 × 1200, >60 FPS, uncapped mouse turn speed, and the options below. Turn off for the stock game.',
+    'set.fov': 'Field of view (FOV)', 'set.fov.hint': 'Horizontal hipfire FOV (at 16:9). Sights and scopes keep their zoom.', 'set.fov.stock': 'Default 79°',
+    'cone.title': '{deg}° field of view compared to default 79°',
+    'set.maxfps': 'FPS limit', 'fps.auto': 'Auto (monitor refresh rate)', 'fps.none': 'Uncapped',
+    'set.ads': 'Aim sensitivity', 'set.focal': 'Scale by focal length', 'set.focal.hint': 'Keeps aiming feel consistent across zoom levels instead of using the game’s default curve.', 'set.adsmult': 'ADS multiplier', 'set.scopemult': 'Scope multiplier',
     'acc.label': 'Account', 'acc.login': 'Sign in', 'acc.create': 'New account', 'acc.name': 'Nickname', 'acc.password': 'Password',
-    'acc.create.hint': 'Free, no e-mail needed. The password, 6 characters or more.', 'acc.forgot': 'Forgot your password?', 'acc.invite': 'Invitation code',
+    'acc.create.hint': 'Free, no email required. Password must be at least 6 characters.', 'acc.forgot': 'Forgot your password?', 'acc.invite': 'Invitation code',
     'play': 'Play', 'play.create': 'Create account and play',
-    'reset.title': 'Change the password', 'reset.intro': 'Ask an administrator on Discord for a code. It works once and expires in 24 hours.',
-    'reset.code': 'Code', 'reset.new': 'New password', 'reset.again': 'Repeat the new password', 'reset.go': 'Change password', 'reset.back': 'Back',
+    'reset.title': 'Reset password', 'reset.intro': 'Ask an admin on Discord for a reset code. Single-use, valid for 24 hours.',
+    'reset.code': 'Code', 'reset.new': 'New password', 'reset.again': 'Confirm new password', 'reset.go': 'Change password', 'reset.back': 'Back',
     'links.label': 'Links', 'links.status': 'Server status', 'links.source': 'Source code', 'links.support': 'Support the server',
-    'legal': 'A community project, not affiliated with Ubisoft.', 'version': 'Launcher {v}',
-    'msg.need': 'Type your nickname and your password.', 'msg.short': 'The password needs at least 6 characters.', 'msg.invite': 'Type the invitation code.',
-    'msg.connecting': 'Connecting...', 'msg.reset.need': 'Type your nickname, the code and the new password.', 'msg.reset.differ': 'The two passwords are not the same.',
-    'msg.reset.busy': 'Changing the password...', 'msg.reset.done': 'Password changed. You can sign in with the new one.',
+    'legal': 'Community project, not affiliated with Ubisoft.', 'version': 'Launcher {v}',
+    'msg.need': 'Enter your nickname and password.', 'msg.short': 'Password must be at least 6 characters.', 'msg.invite': 'Enter your invitation code.',
+    'msg.connecting': 'Connecting...', 'msg.reset.need': 'Enter your nickname, reset code, and new password.', 'msg.reset.differ': 'Passwords do not match.',
+    'msg.reset.busy': 'Updating password...', 'msg.reset.done': 'Password updated. You can sign in now.',
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   },
 };
@@ -530,7 +530,9 @@ listen('done', (e) => {
   showDxvk(s.dxvk);
   $('dxvk').disabled = LINUX;
   // The language the player chose; the first time, English for a system in English and Spanish for the rest.
-  applyLang(s.lang || (/^en\b/i.test(navigator.language || '') ? 'en' : 'es'));
+  const initialLang = s.lang || (/^en\b/i.test(navigator.language || '') ? 'en' : 'es');
+  applyLang(initialLang);
+  if (!s.lang && initialLang === 'en') invoke('set_lang', { lang: 'en' }).catch(() => {});
   (s.name ? $('password') : $('name')).focus();
   await loadNotes();
   if (!tauri) preview(location.hash.slice(1).split(','));
@@ -544,6 +546,6 @@ function preview(want) {
   if (want.includes('calc')) { showSensCalc(true); $('sensInput').value = '30'; updateSensCalc(); }
   if (want.includes('fov')) { $('fov').value = 8; drawCone(); }
   if (want.includes('busy')) { setBusy(true); setStatus(lang === 'en' ? 'Downloading Yeti.big  (1840 of 4012 MB)' : 'Descargando Yeti.big  (1840 de 4012 MB)', 0.46); }
-  if (want.includes('fault')) setStatus(lang === 'en' ? 'Wrong nickname or password.' : 'Nickname o contraseña incorrectos.', -1, 'fault');
+  if (want.includes('fault')) setStatus(lang === 'en' ? 'Incorrect nickname or password.' : 'Nickname o contraseña incorrectos.', -1, 'fault');
   if (want.includes('reset')) showReset(true);
 }
