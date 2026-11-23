@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 11;
+pub const VERSION: u32 = 12;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -907,9 +907,55 @@ pub struct PlayOptions {
     pub width: u32,  // 0: leave the game's resolution as it is
     pub height: u32,
     pub windowed: bool,
+    pub mouse_sens: Option<f32>,    // None: leave MouseSensitivity in KeyMappingsPC.ini as it is
     pub client: Option<ClientMods>, // None: client improvements off
     #[cfg_attr(not(windows), allow(dead_code))]
     pub dxvk: bool,                 // "Vulkan (DXVK)"; Windows only, Linux always has Proton's
+}
+
+/// Parses an exact GRP MouseSensitivity value (accepts dot or comma decimals). Empty or non-positive leaves the
+/// game's own setting untouched; positive values are clamped to [0.001, 10.0].
+pub fn parse_mouse_sens(s: &str) -> Option<f32> {
+    let v = s.trim().replace(',', ".").parse::<f32>().ok()?;
+    if !v.is_finite() || v <= 0.0 {
+        return None;
+    }
+    Some(v.clamp(0.001, 10.0))
+}
+
+fn patch_mouse_sensitivity(text: &str, sens: f32) -> String {
+    let entry = format!("MouseSensitivity={:.6}", sens);
+    let mut lines: Vec<String> = text.lines().map(|l| l.trim_end_matches('\r').to_string()).collect();
+    let mut replaced = false;
+    for l in &mut lines {
+        if l.trim_start().get(..17).map(|p| p.eq_ignore_ascii_case("MouseSensitivity=")).unwrap_or(false) {
+            *l = entry.clone();
+            replaced = true;
+            break;
+        }
+    }
+    if !replaced {
+        if let Some(pos) = lines.iter().position(|l| l.trim().eq_ignore_ascii_case("[Parameter]")) {
+            lines.insert(pos + 1, entry);
+        } else {
+            lines.push("[Parameter]".into());
+            lines.push(entry);
+        }
+    }
+    lines.join("\r\n") + "\r\n"
+}
+
+/// The game reads exact MouseSensitivity from [Parameter] in KeyMappingsPC.ini (and keeps off-grid values outside its
+/// 0.05 slider steps until the player drags the slider). Works with or without the client DLL.
+fn set_mouse_sensitivity(game_dir: &Path, sens: Option<f32>) {
+    let Some(v) = sens else { return };
+    let file = game_dir.join("KeyMappingsPC.ini");
+    let text = match std::fs::read_to_string(&file) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    let _ = std::fs::write(&file, patch_mouse_sensitivity(&text, v));
+    log(&format!("mouse sensitivity {:.6}", v));
 }
 
 /// The game reads its resolution from GraphicSettings.ini in its folder (DisplayWidth, DisplayHeight, Windowed).
@@ -975,6 +1021,7 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
         return Err(format!("No se encontró el juego en:\n{}", game_dir.join(GAME_EXE).display()));
     }
     set_resolution(game_dir, o);
+    set_mouse_sensitivity(game_dir, o.mouse_sens);
     let vault_key = if o.sync { a.get(3).copied() } else { None };
     set_client_mods(vault_key, game_dir, o.client, progress);
     #[cfg(windows)]
@@ -1265,5 +1312,33 @@ mod tests {
             "[Client]\r\nMaxFps=\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=\r\nFocalLengthScaling=0\r\nAdsMultiplier=1.0\r\nScopeMultiplier=1.0\r\n"
         );
         assert_eq!(client_mods(false, "144", "100", true, "1.5", "0.5"), None);
+    }
+
+    #[test]
+    fn parses_mouse_sensitivity_and_clamps() {
+        assert_eq!(parse_mouse_sens(""), None);
+        assert_eq!(parse_mouse_sens("0"), None);
+        assert_eq!(parse_mouse_sens("-0.5"), None);
+        assert_eq!(parse_mouse_sens("abc"), None);
+        assert_eq!(parse_mouse_sens("0,129154"), Some(0.129154));
+        assert_eq!(parse_mouse_sens("0.0001"), Some(0.001));
+        assert_eq!(parse_mouse_sens("25"), Some(10.0));
+    }
+
+    #[test]
+    fn patches_keymappings_sensitivity_preserving_bindings() {
+        let sample = "[Button Mappings 0]\r\nMove Forward=Key_W\r\n[Parameter]\r\nAimToggleable=0\r\nMouseSensitivity=0.600000\r\nInvertMouseYAxis=0\r\n[Input Set Selection]\r\nInputSetNumber=0\r\n";
+        let out = patch_mouse_sensitivity(sample, 0.129154);
+        assert_eq!(
+            out,
+            "[Button Mappings 0]\r\nMove Forward=Key_W\r\n[Parameter]\r\nAimToggleable=0\r\nMouseSensitivity=0.129154\r\nInvertMouseYAxis=0\r\n[Input Set Selection]\r\nInputSetNumber=0\r\n"
+        );
+        let no_key = "[Parameter]\r\nAimToggleable=0\r\n";
+        assert_eq!(patch_mouse_sensitivity(no_key, 0.25), "[Parameter]\r\nMouseSensitivity=0.250000\r\nAimToggleable=0\r\n");
+        let no_section = "[Button Mappings 0]\r\nMove Forward=Key_W\r\n";
+        assert_eq!(
+            patch_mouse_sensitivity(no_section, 0.5),
+            "[Button Mappings 0]\r\nMove Forward=Key_W\r\n[Parameter]\r\nMouseSensitivity=0.500000\r\n"
+        );
     }
 }

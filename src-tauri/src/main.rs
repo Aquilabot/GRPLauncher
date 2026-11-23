@@ -27,6 +27,7 @@ struct State {
     gamedir: String,
     resolution: String, // "auto" or "WxH"
     windowed: bool,
+    mousesens: String,  // empty: leave KeyMappingsPC.ini untouched
     clientmods: bool,
     maxfps: String,     // empty: the monitor's refresh rate
     fov: String,        // empty: stock (~79.3 deg horizontal at 16:9)
@@ -73,6 +74,7 @@ fn get_state() -> State {
         gamedir: s.get("gamedir").filter(|v| !v.is_empty()).cloned().unwrap_or_else(|| core::default_game_dir().to_string_lossy().into_owned()),
         resolution: s.get("resolution").cloned().unwrap_or_else(|| "auto".into()),
         windowed: s.get("windowed").map(|v| v == "1").unwrap_or(false),
+        mousesens: s.get("mousesens").cloned().unwrap_or_default(),
         clientmods: cm.on,
         maxfps: cm.maxfps,
         fov: cm.fov,
@@ -96,6 +98,8 @@ struct PlayArgs {
     width: u32,
     height: u32,
     windowed: bool,
+    #[serde(default)]
+    mousesens: String,
     clientmods: bool,
     maxfps: String,
     #[serde(default)]
@@ -130,6 +134,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("gamedir", args.gamedir.clone()),
             ("resolution", args.resolution.clone()),
             ("windowed", if args.windowed { "1" } else { "0" }.to_string()),
+            ("mousesens", args.mousesens.clone()),
             ("clientmods", if args.clientmods { "1" } else { "0" }.to_string()),
             ("maxfps", args.maxfps.clone()),
             ("fov", args.fov.clone()),
@@ -157,7 +162,8 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         if error.is_none() {
             let playing_app = app.clone();
             let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult);
-            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, client, dxvk: args.dxvk };
+            let mouse_sens = core::parse_mouse_sens(&args.mousesens);
+            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, mouse_sens, client, dxvk: args.dxvk };
             error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
             })
@@ -278,7 +284,8 @@ fn main() {
         let saved = core::settings();
         let cm = saved_client_mods(&saved);
         let client = core::client_mods(cm.on, &cm.maxfps, &cm.fov, cm.focallength, &cm.adsmult, &cm.scopemult);
-        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, client, dxvk: saved_dxvk(&saved) };
+        let mouse_sens = saved.get("mousesens").and_then(|v| core::parse_mouse_sens(v));
+        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, mouse_sens, client, dxvk: saved_dxvk(&saved) };
         let r = core::play(
             &name,
             &pw,

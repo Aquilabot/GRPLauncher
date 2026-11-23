@@ -39,6 +39,11 @@ select:disabled, input:disabled { opacity: .55; }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
 .row { display: flex; gap: 10px; align-items: center; }
 .col { flex: 1; min-width: 0; }
+.subpanel { margin-top: 8px; padding: 10px; background: rgba(24, 33, 42, .65); border: 1px solid var(--line); border-radius: 2px; }
+.subpanel[hidden] { display: none; }
+.subpanel .col label { margin-top: 8px; }
+.calc-foot { margin-top: 8px; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.tight-btn { padding: 6px 12px; font-size: 12px; }
 details {
   margin-top: 14px; border-top: 1px solid var(--line); padding-top: 8px;
   /* with Options and the invitation open the form is taller than the window: Options scroll, JUGAR stays in view */
@@ -48,6 +53,7 @@ summary { color: var(--muted); font-size: 12px; cursor: pointer; text-transform:
 button { font: inherit; cursor: pointer; border-radius: 2px; }
 .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); padding: 9px 14px; }
 .ghost:hover { border-color: var(--accent); }
+.ghost:disabled { opacity: .45; cursor: default; border-color: var(--line); }
 .link { align-self: flex-start; background: none; border: 0; padding: 0; margin-top: 6px; color: var(--muted); font-size: 12px; }
 .link:hover, .link:focus-visible { color: var(--accent); text-decoration: underline; outline: none; }
 .link:disabled { opacity: .5; cursor: default; text-decoration: none; }

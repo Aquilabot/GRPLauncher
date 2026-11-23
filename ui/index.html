@@ -42,6 +42,38 @@
         <select id="resolution"></select>
         <label class="check tight"><input id="windowed" type="checkbox"> En ventana</label>
       </div>
+      <label for="mousesens">Sensibilidad del ratón <span class="hint">(exacta; vacío = del juego)</span></label>
+      <div class="row" title="Valor exacto de MouseSensitivity en KeyMappingsPC.ini (sin pasos de 0,05). Funciona con o sin mejoras del cliente. Vacío conserva el del juego.">
+        <input id="mousesens" type="text" inputmode="decimal" spellcheck="false" placeholder="Sin cambios (del juego)">
+        <button type="button" id="sensToggle" class="ghost">Calcular</button>
+      </div>
+      <div id="sensCalc" class="subpanel" hidden>
+        <div class="row">
+          <select id="sensFrom">
+            <option value="cm360">cm por vuelta (360°)</option>
+            <option value="thefinals">The Finals</option>
+            <option value="cs2">CS2 / Apex Legends</option>
+            <option value="valorant">Valorant</option>
+            <option value="ow2">Overwatch 2 / Call of Duty</option>
+            <option value="fortnite">Fortnite (%)</option>
+            <option value="r6">Rainbow Six Siege</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="col">
+            <label for="sensInput" id="sensInputLabel">cm / 360°</label>
+            <input id="sensInput" type="text" inputmode="decimal" spellcheck="false" placeholder="30">
+          </div>
+          <div class="col" id="sensDpiCol">
+            <label for="sensDpi">DPI del ratón</label>
+            <input id="sensDpi" type="number" min="100" max="32000" step="50" value="800">
+          </div>
+        </div>
+        <div class="row calc-foot">
+          <span class="hint" id="sensPreview">Escribe un valor para calcular.</span>
+          <button type="button" id="sensApply" class="ghost tight-btn" disabled>Aplicar</button>
+        </div>
+      </div>
       <label for="maxfps">Mejoras del cliente y límite de FPS</label>
       <div class="row" title="Resoluciones de más de 1920 × 1200 en Opciones > Vídeo del juego, más de 60 FPS, ratón sin límite de giro por fotograma y ajustes de FOV y sensibilidad. Desactivadas, el juego queda como el original.">
         <label class="check tight"><input id="clientmods" type="checkbox"> Activadas</label>

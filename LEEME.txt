@@ -41,6 +41,9 @@ OPCIONES
 - Carpeta del juego: dónde se instala. Por defecto, %LOCALAPPDATA%\GRP\Ghost Recon Phantoms.
 - Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en
   ventana.
+- Sensibilidad del ratón: escribe un valor exacto (sin pasos de 0,05 del deslizador del juego) o pulsa
+  "Calcular" para convertir desde cm por vuelta (360°) + DPI o desde otro juego (The Finals, CS2/Apex,
+  Valorant, Overwatch 2/CoD, Fortnite o Rainbow Six Siege). Vacío conserva la sensibilidad del juego.
 - Mejoras del cliente (activadas por defecto): el launcher pone un archivo nuestro, version.dll, en la
   carpeta del juego. Con él, Opciones > Vídeo ofrece resoluciones de más de 1920 x 1200, el juego pasa de
   60 FPS, se elimina el límite de giro rápido del ratón por fotograma y puedes ajustar el campo de visión

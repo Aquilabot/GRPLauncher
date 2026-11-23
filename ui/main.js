@@ -3,7 +3,7 @@
 // collects what the player typed and shows the progress events.
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', dxvk: true, server: 'vista previa' } : null);
+const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', dxvk: true, server: 'vista previa' } : null);
 const listen = tauri ? tauri.event.listen : async () => {};
 
 // The screen's own resolution, in real pixels (the page sees scaled ones on high-DPI screens).
@@ -20,6 +20,73 @@ function fillResolutions(saved) {
   if (saved && saved !== 'auto' && ![...sel.options].some((o) => o.value === saved)) sel.add(new Option(saved.replace('x', ' × '), saved));
   sel.value = saved || 'auto';
 }
+
+// Exact MouseSensitivity converter: GRP turns MouseSensitivity / 200 radians per mouse count (no acceleration).
+const GRP_DEG_PER_SENS = 180 / (200 * Math.PI);
+const GAME_YAW = {
+  thefinals: { label: 'Sensibilidad en The Finals', placeholder: '37', yaw: 0.001 },
+  cs2: { label: 'Sensibilidad en CS2 / Apex', placeholder: '2.0', yaw: 0.022 },
+  valorant: { label: 'Sensibilidad en Valorant', placeholder: '0.35', yaw: 0.07 },
+  ow2: { label: 'Sensibilidad en Overwatch 2 / CoD', placeholder: '5.5', yaw: 0.0066 },
+  fortnite: { label: 'Sensibilidad en Fortnite (%)', placeholder: '6.5', yaw: 0.005555 },
+  r6: { label: 'Sensibilidad en Rainbow Six Siege', placeholder: '10', yaw: 0.005729578 },
+};
+let sensComputed = null;
+const parseNum = (s) => {
+  const n = Number(String(s || '').trim().replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : NaN;
+};
+function updateSensCalc() {
+  const mode = $('sensFrom').value;
+  const isCm = mode === 'cm360';
+  $('sensDpiCol').hidden = !isCm;
+  if (isCm) {
+    $('sensInputLabel').textContent = 'cm / 360°';
+    $('sensInput').placeholder = '30';
+  } else {
+    $('sensInputLabel').textContent = GAME_YAW[mode].label;
+    $('sensInput').placeholder = GAME_YAW[mode].placeholder;
+  }
+  const val = parseNum($('sensInput').value);
+  const dpi = parseNum($('sensDpi').value);
+  let sens = NaN;
+  if (isCm && val > 0 && dpi > 0) sens = (400 * Math.PI * 2.54) / (val * dpi);
+  else if (!isCm && val > 0) sens = (val * GAME_YAW[mode].yaw) / GRP_DEG_PER_SENS;
+  if (Number.isFinite(sens) && sens > 0) {
+    sensComputed = Math.min(10, Math.max(0.001, sens));
+    $('sensPreview').textContent = `→ GRP ${sensComputed.toFixed(6)}`;
+    $('sensApply').disabled = $('play').disabled;
+  } else {
+    sensComputed = null;
+    $('sensApply').disabled = true;
+    const cur = parseNum($('mousesens').value);
+    if (isCm && cur > 0 && dpi > 0) {
+      const curCm = (400 * Math.PI * 2.54) / (cur * dpi);
+      $('sensPreview').textContent = `Actual: ${curCm.toFixed(1)} cm/360° a ${Math.round(dpi)} DPI`;
+    } else {
+      $('sensPreview').textContent = 'Escribe un valor para calcular.';
+    }
+  }
+}
+function applySensCalc() {
+  if (sensComputed === null) return;
+  $('mousesens').value = sensComputed.toFixed(6);
+  $('sensCalc').hidden = true;
+  $('sensToggle').textContent = 'Calcular';
+  $('mousesens').focus();
+}
+$('sensToggle').addEventListener('click', () => {
+  const show = $('sensCalc').hidden;
+  $('sensCalc').hidden = !show;
+  $('sensToggle').textContent = show ? 'Cerrar' : 'Calcular';
+  if (show) { updateSensCalc(); $('sensInput').focus(); }
+});
+$('sensFrom').addEventListener('change', () => { $('sensInput').value = ''; updateSensCalc(); $('sensInput').focus(); });
+for (const id of ['sensInput', 'sensDpi', 'mousesens']) $(id).addEventListener('input', updateSensCalc);
+for (const id of ['sensInput', 'sensDpi']) $(id).addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') { ev.preventDefault(); applySensCalc(); }
+});
+$('sensApply').addEventListener('click', applySensCalc);
 
 // "Mejoras del cliente": our version.dll and its frame cap, FOV, and ADS sensitivity settings.
 function fillMaxFps(saved) {
@@ -59,7 +126,8 @@ function setStatus(text, fraction) {
 
 function setBusy(busy) {
   $('play').disabled = busy;
-  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed', 'clientmods']) $(id).disabled = busy;
+  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods']) $(id).disabled = busy;
+  $('sensApply').disabled = busy || sensComputed === null;
   syncClientMods(busy);
   $('dxvk').disabled = busy || LINUX;
 }
@@ -121,7 +189,7 @@ $('form').addEventListener('submit', async (ev) => {
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus('Conectando...');
-  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: $('fov').value, focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), dxvk: $('dxvk').checked } });
+  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: $('fov').value, focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), dxvk: $('dxvk').checked } });
 });
 
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
@@ -209,6 +277,7 @@ listen('done', (e) => {
   $('server').textContent = `Servidor ${s.server}`;
   $('version').textContent = `launcher ${s.version}`;
   fillResolutions(s.resolution);
+  $('mousesens').value = s.mousesens || '';
   fillMaxFps(s.maxfps);
   fillFov(s.fov);
   $('focallength').checked = !!s.focallength;
