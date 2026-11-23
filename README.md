@@ -22,7 +22,7 @@
 
 1. Download **`GRPLauncher.zip`** from the [latest GitHub release](https://github.com/Aquilabot/GRPLauncher/releases/latest).
 2. Extract the entire folder anywhere on your PC (do not run it from inside the `.zip`).
-3. Open **`GRPLauncher.exe`**, check **"Crear cuenta nueva"**, choose a nickname and password, and click **CREAR CUENTA Y JUGAR**.
+3. Open **`GRPLauncher.exe`**, pick **New account** (the launcher is in Spanish and English: **ES / EN**, top right), choose a nickname and password, and click **CREATE ACCOUNT AND PLAY**.
    - Registration is free — no invitation code required.
    - On first launch, the launcher downloads the game (~4 GB) and installs DirectX 9 if missing.
    - Future updates to both the launcher and the game happen automatically.
@@ -97,13 +97,13 @@ The program's version resource names the publisher and copyright (`bundle` in `t
 
 ### Client improvements
 
-"Mejoras del cliente" in Opciones, on by default: our `version.dll` (source and patch list in the GRP repository, `client/grp-client-dll/`) in the game folder, with `grp-client.ini` next to it (`[Client]`, `MaxFps=` empty for the monitor's refresh rate or the number chosen, `UnlockResolutions=1`, FOV and mouse options, CRLF). Switched off, the launcher deletes both and the game is the original. On Linux the game always runs with `WINEDLLOVERRIDES=version=n,b`, so a `version.dll` in its folder wins over Wine's, as it does on Windows. Kept in `settings.txt` as `clientmods` (`0` = off) and `maxfps`.
+"Client improvements" ("Mejoras del cliente") in Settings, on by default: our `version.dll` (source and patch list in the GRP repository, `client/grp-client-dll/`) in the game folder, with `grp-client.ini` next to it (`[Client]`, `MaxFps=` empty for the monitor's refresh rate or the number chosen, `UnlockResolutions=1`, FOV and mouse options, CRLF). Switched off, the launcher deletes both and the game is the original. On Linux the game always runs with `WINEDLLOVERRIDES=version=n,b`, so a `version.dll` in its folder wins over Wine's, as it does on Windows. Kept in `settings.txt` as `clientmods` (`0` = off) and `maxfps`.
 
 The DLL is not in the vault's manifest (that list is mirrored on every start, whatever the option). It sits in `/files/<key>/client/` (on the VPS `/srv/grp/vault/client/`): `version.txt` holds `<sha256> <size>` of `version.dll`. On each start with the option on, the launcher compares that hash with the file in the game folder and, when they differ, downloads to `version.dll.part` and moves it into place only when size and hash match. A failed check is logged and the game starts with the DLL it had, or none. Publishing a new DLL is uploading `version.dll`, then `version.txt`.
 
 ### Vulkan (DXVK)
 
-"Vulkan (DXVK)" in Opciones, on by default on Windows: DXVK's 32-bit `d3d9.dll` (release 3.1.1, the version Proton runs the game with on Linux) in the game folder next to our `version.dll`, so the game draws through Vulkan, with DXVK's license beside it (`DXVK-LICENSE.txt`, from `third-party/`). Kept in `settings.txt` as `dxvk` (`0` = off). Switched off, or on a machine where DXVK cannot run, the launcher deletes both and the game uses DirectX 9.
+"Vulkan (DXVK)" in Settings, on by default on Windows: DXVK's 32-bit `d3d9.dll` (release 3.1.1, the version Proton runs the game with on Linux) in the game folder next to our `version.dll`, so the game draws through Vulkan, with DXVK's license beside it (`DXVK-LICENSE.txt`, from `third-party/`). Kept in `settings.txt` as `dxvk` (`0` = off). Switched off, or on a machine where DXVK cannot run, the launcher deletes both and the game uses DirectX 9.
 
 - **Vulkan check, before each start:** the 32-bit Vulkan loader (`SysWOW64\vulkan-1.dll`) must exist, and `GRPLauncher.exe --vulkan-check`, run as a child process so a broken driver or layer cannot take the launcher down (killed after 20 s), must find a device DXVK would take: Vulkan 1.3, not a software renderer, with the extensions DXVK 3.1.1 requires (`VK_KHR_swapchain`, `VK_EXT_robustness2`, `VK_KHR_maintenance5`, `VK_KHR_maintenance6`, `VK_KHR_load_store_op_none`, `VK_EXT_depth_clip_enable`). It prints `ok <device>` or `no <why>`; the launcher logs either. `GRP_VULKAN_CHECK=pass|fail` skips it (tests).
 - **After each game with DXVK:** DXVK writes `GhostReconPhantoms_d3d9.log` in the game folder (cleared before each start). Without its `"Presenter: Actual swapchain properties"` line, DXVK never showed a frame: the launcher deletes the DLL, saves `dxvk=0`, logs the first `err:` line, and tells the player to press JUGAR again (DirectX 9 then).
@@ -112,7 +112,7 @@ The DLL is not in the vault's manifest (that list is mirrored on every start, wh
 
 ### Release notes
 
-The main window shows what changed on the server, in the launcher, and in the game, between Opciones and JUGAR ("Novedades"). They come from `<base>/launcher/notes.json` (on the community server `https://grp.limacashout.pro/launcher/notes.json`, on the VPS `/srv/grp/launcher/notes.json`). `/launcher/` is public, like `version.txt`, so the notes show before signing in. One JSON list, newest first:
+The home view shows what changed on the server, in the launcher, and in the game ("Novedades" / "What changed"), under the terrain. They come from `<base>/launcher/notes.json` (on the community server `https://grp.limacashout.pro/launcher/notes.json`, on the VPS `/srv/grp/launcher/notes.json`). `/launcher/` is public, like `version.txt`, so the notes show before signing in. One JSON list, newest first:
 
 ```json
 [
@@ -125,7 +125,7 @@ The main window shows what changed on the server, in the launcher, and in the ga
 - `id`: a whole number that grows with each note; the launcher shows the highest first.
 - `tag`: `servidor`, `launcher`, or `juego` (anything else: no tag shown). `date`: `YYYY-MM-DD` (anything else: none shown).
 - Limits (`src-tauri/src/notes.rs`): file up to 64 KB, the 50 highest ids, title up to 120 characters, up to 12 items of up to 400. A longer text is cut; an entry without a numeric `id` or a `title` is skipped; a file that is missing, too big, or not a list shows no panel, and the window looks as it did before. Everything is shown as text.
-- The highest id the player has seen is `notesseen` in `settings.txt`. Newer entries get a mark and the heading a count; scrolling or clicking the list, or pressing JUGAR, counts as seen (the marks stay until the window closes).
+- The highest id the player has seen is `notesseen` in `settings.txt`. Newer entries get a mark and the heading a count; scrolling or clicking the list, or pressing Play, counts as seen (the marks stay until the window closes). A player who has never seen the list gets nothing marked.
 
 To add one: `research/tools/deploy/notes-add.sh <tag> "<title>" "<item>" ...` in the GRP repository prints the new file (next id, today's date); with `--publish` it uploads it.
 

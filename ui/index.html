@@ -7,130 +7,232 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <header>
-    <div class="mark">GRP</div>
-    <div>
+<!--
+THESIS: The launcher speaks the game's own cross-com visor: thin line readouts over blue-black, labels tied to what
+they describe by leader lines. It refuses the launcher default of a key-art hero with a login card on top.
+OWN-WORLD: Blue-black ground, teal hairlines, one cyan signal for what is live or chosen, amber for what is new,
+red for what failed. Chamfered plates, square marks, Barlow condensed capitals, tabular figures. No glow, no glass.
+STORY: The player sees their server is there, reads what changed, and presses JUGAR; settings the 2016 game never
+had sit one tab away, drawn rather than listed.
+FIRST VIEWPORT: 1000 x 620. Left field: a line-scanned terrain with the server tagged by a leader label, the release
+notes beneath. Right column, always present: account, the JUGAR plate, status. Bottom rail: links, support, version.
+FORM: Cross-com link, the owner's pick over the rolled direction (top of the grounded list). Seed 8d112959.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="app" id="app" data-view="home">
+  <header class="top">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M16 2.5 29.5 16 16 29.5 2.5 16Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M16 9.5 22.5 16 16 22.5 9.5 16Z" fill="currentColor"/>
+        <path d="M16 0v5M16 27v5M0 16h5M27 16h5" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
       <h1>Ghost Recon Phantoms</h1>
-      <p class="sub" id="server"></p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Secciones" data-i18n-aria="nav.label">
+      <button type="button" role="tab" id="tabHome" aria-controls="viewHome" aria-selected="true" data-i18n="nav.home">Inicio</button>
+      <button type="button" role="tab" id="tabSettings" aria-controls="viewSettings" aria-selected="false" data-i18n="nav.settings">Ajustes</button>
+    </nav>
+    <div class="lang" role="group" aria-label="Idioma" data-i18n-aria="lang.label">
+      <button type="button" data-lang="es" aria-pressed="true">ES</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
     </div>
   </header>
 
-  <form id="form" autocomplete="off">
-    <label for="name">Nickname</label>
-    <input id="name" maxlength="16" spellcheck="false">
-
-    <label for="password">Contraseña</label>
-    <input id="password" type="password">
-    <button type="button" id="forgot" class="link">¿Olvidaste tu contraseña?</button>
-
-    <label class="check"><input id="create" type="checkbox"> Crear cuenta nueva</label>
-    <div id="inviteRow" hidden>
-      <label for="invite">Código de invitación</label>
-      <input id="invite" spellcheck="false" placeholder="XXXXX-XXXXX">
-    </div>
-
-    <details>
-      <summary>Opciones</summary>
-      <label for="gamedir">Carpeta del juego <span class="hint">(se descarga ahí si falta, unos 4 GB)</span></label>
-      <div class="row">
-        <input id="gamedir" spellcheck="false">
-        <button type="button" id="browse" class="ghost">Buscar</button>
-      </div>
-      <label for="resolution">Resolución</label>
-      <div class="row">
-        <select id="resolution"></select>
-        <label class="check tight"><input id="windowed" type="checkbox"> En ventana</label>
-      </div>
-      <label for="mousesens">Sensibilidad del ratón <span class="hint">(exacta; vacío = del juego)</span></label>
-      <div class="row" title="Valor exacto de MouseSensitivity en KeyMappingsPC.ini (sin pasos de 0,05). Funciona con o sin mejoras del cliente. Vacío conserva el del juego.">
-        <input id="mousesens" type="text" inputmode="decimal" spellcheck="false" placeholder="Sin cambios (del juego)">
-        <button type="button" id="sensToggle" class="ghost">Calcular</button>
-      </div>
-      <div id="sensCalc" class="subpanel" hidden>
-        <div class="row">
-          <select id="sensFrom">
-            <option value="cm360">cm por vuelta (360°)</option>
-            <option value="thefinals">The Finals</option>
-            <option value="cs2">CS2 / Apex Legends</option>
-            <option value="valorant">Valorant</option>
-            <option value="ow2">Overwatch 2 / Call of Duty</option>
-            <option value="fortnite">Fortnite (%)</option>
-            <option value="r6">Rainbow Six Siege</option>
-          </select>
-        </div>
-        <div class="row">
-          <div class="col">
-            <label for="sensInput" id="sensInputLabel">cm / 360°</label>
-            <input id="sensInput" type="text" inputmode="decimal" spellcheck="false" placeholder="30">
-          </div>
-          <div class="col" id="sensDpiCol">
-            <label for="sensDpi">DPI del ratón</label>
-            <input id="sensDpi" type="number" min="100" max="32000" step="50" value="800">
+  <main>
+    <section class="field" id="viewHome" role="tabpanel" aria-labelledby="tabHome">
+      <div class="visor">
+        <svg id="terrain" viewBox="0 0 660 214" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+        <div class="tag" id="serverTag">
+          <svg class="leader" viewBox="0 0 90 46" aria-hidden="true"><path d="M5 41 40 6H90" fill="none" stroke="currentColor"/><path d="M5 36l5 5-5 5-5-5z" fill="currentColor"/></svg>
+          <div class="tag-body">
+            <p class="tag-name" data-i18n="server.name">Servidor de la comunidad</p>
+            <p class="tag-data"><span id="server"></span><span class="sep"></span><span data-i18n="server.place">São Paulo · 60 Hz</span></p>
           </div>
         </div>
-        <div class="row calc-foot">
-          <span class="hint" id="sensPreview">Escribe un valor para calcular.</span>
-          <button type="button" id="sensApply" class="ghost tight-btn" disabled>Aplicar</button>
+      </div>
+      <div class="notes" id="notes">
+        <div class="notes-head">
+          <h2 data-i18n="notes.title">Novedades</h2>
+          <span id="notesNew" hidden></span>
         </div>
+        <div id="notesList" tabindex="0"></div>
+        <p class="notes-empty" id="notesEmpty" data-i18n="notes.empty" hidden>Todavía no hay novedades publicadas.</p>
       </div>
-      <label for="maxfps">Mejoras del cliente y límite de FPS</label>
-      <div class="row" title="Resoluciones de más de 1920 × 1200 en Opciones > Vídeo del juego, más de 60 FPS, ratón sin límite de giro por fotograma y ajustes de FOV y sensibilidad. Desactivadas, el juego queda como el original.">
-        <label class="check tight"><input id="clientmods" type="checkbox"> Activadas</label>
-        <select id="maxfps"></select>
-      </div>
-      <label for="fov">Campo de visión (FOV)</label>
-      <div class="row" title="Campo de visión horizontal al caminar o correr (en 16:9). Las miras y telescopios conservan su zoom original.">
-        <select id="fov"></select>
-      </div>
-      <label class="check" title="Escala la sensibilidad al apuntar según la distancia focal real (tan(FOV/2)) en lugar de la curva original del juego.">
-        <input id="focallength" type="checkbox"> Escalar sensibilidad al apuntar por distancia focal
-      </label>
-      <div class="row">
-        <div class="col" title="Multiplicador de sensibilidad al apuntar con mira de punto rojo o hierro (0.1 a 3.0; vacío o 1.0 = normal).">
-          <label for="adsmult">Multiplicador ADS</label>
-          <input id="adsmult" type="number" min="0.1" max="3.0" step="0.05" placeholder="1.0">
-        </div>
-        <div class="col" title="Multiplicador de sensibilidad con miras telescópicas de francotirador (0.1 a 3.0; vacío o 1.0 = normal).">
-          <label for="scopemult">Multiplicador mira</label>
-          <input id="scopemult" type="number" min="0.1" max="3.0" step="0.05" placeholder="1.0">
-        </div>
-      </div>
-      <label for="dxvk">Vulkan (DXVK)</label>
-      <div class="row" id="dxvkRow" title="El juego dibuja con Vulkan a través de DXVK, como en Linux. Si tu tarjeta gráfica no tiene Vulkan 1.3 o el juego no abre así, se usa DirectX 9.">
-        <label class="check tight"><input id="dxvk" type="checkbox"> Activado</label>
-        <span class="hint" id="dxvkNote">Si tu tarjeta no tiene Vulkan, el juego usa DirectX 9.</span>
-      </div>
-    </details>
-
-    <section id="notes" hidden>
-      <div class="notes-head">Novedades <span id="notesNew" hidden></span></div>
-      <div id="notesList" tabindex="0"></div>
     </section>
 
-    <button id="play" class="primary">JUGAR</button>
-  </form>
+    <section class="field settings" id="viewSettings" role="tabpanel" aria-labelledby="tabSettings" hidden>
+      <div class="set-scroll">
+        <fieldset class="group">
+          <legend data-i18n="set.game">Juego</legend>
+          <div class="item wide">
+            <label for="gamedir" data-i18n="set.gamedir">Carpeta del juego</label>
+            <div class="row">
+              <input id="gamedir" spellcheck="false">
+              <button type="button" id="browse" class="ghost" data-i18n="set.browse">Buscar</button>
+            </div>
+            <p class="hint" data-i18n="set.gamedir.hint">Si el juego no está ahí, se descarga (unos 4 GB).</p>
+          </div>
+          <div class="item">
+            <label for="resolution" data-i18n="set.resolution">Resolución</label>
+            <select id="resolution"></select>
+            <label class="check" id="windowedRow"><input id="windowed" type="checkbox"><span data-i18n="set.windowed">En ventana</span></label>
+          </div>
+          <div class="item" id="dxvkRow">
+            <span class="label" data-i18n="set.dxvk">Vulkan (DXVK)</span>
+            <label class="check"><input id="dxvk" type="checkbox"><span data-i18n="set.on">Activado</span></label>
+            <p class="hint" id="dxvkNote" data-i18n="set.dxvk.hint">Si tu tarjeta no tiene Vulkan 1.3 o el juego no abre así, se usa DirectX 9.</p>
+          </div>
+        </fieldset>
 
-  <form id="resetForm" autocomplete="off" hidden>
-    <p class="intro">Pide un código a un administrador en Discord. Sirve una sola vez y caduca en 24 horas.</p>
-    <label for="resetName">Nickname</label>
-    <input id="resetName" maxlength="16" spellcheck="false">
-    <label for="resetCode">Código</label>
-    <input id="resetCode" spellcheck="false" placeholder="XXXXX-XXXXX">
-    <label for="resetPassword">Contraseña nueva</label>
-    <input id="resetPassword" type="password">
-    <label for="resetPassword2">Repite la contraseña nueva</label>
-    <input id="resetPassword2" type="password">
-    <button type="button" id="resetBack" class="link">Volver</button>
-    <button id="resetGo" class="primary">CAMBIAR CONTRASEÑA</button>
-  </form>
+        <fieldset class="group">
+          <legend data-i18n="set.mouse">Ratón</legend>
+          <div class="item wide">
+            <label for="mousesens" data-i18n="set.sens">Sensibilidad exacta</label>
+            <div class="row">
+              <input id="mousesens" type="text" inputmode="decimal" spellcheck="false" placeholder="Sin cambios (la del juego)" data-i18n-placeholder="set.sens.placeholder">
+              <button type="button" id="sensToggle" class="ghost" aria-expanded="false" aria-controls="sensCalc" data-i18n="set.calc">Calcular</button>
+            </div>
+            <p class="hint" data-i18n="set.sens.hint">El valor que el juego usa por dentro, sin los pasos de 0,05 del menú. Vacío conserva el del juego.</p>
+            <div id="sensCalc" class="calc" hidden>
+              <div class="calc-grid">
+                <div>
+                  <label for="sensFrom" data-i18n="calc.from">Convertir desde</label>
+                  <select id="sensFrom">
+                    <option value="cm360" data-i18n="calc.cm360">cm por vuelta (360°)</option>
+                    <option value="thefinals">The Finals</option>
+                    <option value="cs2">CS2 / Apex Legends</option>
+                    <option value="valorant">Valorant</option>
+                    <option value="ow2">Overwatch 2 / Call of Duty</option>
+                    <option value="fortnite">Fortnite (%)</option>
+                    <option value="r6">Rainbow Six Siege</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="sensInput" id="sensInputLabel">cm / 360°</label>
+                  <input id="sensInput" type="text" inputmode="decimal" spellcheck="false" placeholder="30">
+                </div>
+                <div id="sensDpiCol">
+                  <label for="sensDpi" data-i18n="calc.dpi">DPI del ratón</label>
+                  <input id="sensDpi" type="number" min="100" max="32000" step="50" value="800">
+                </div>
+              </div>
+              <div class="calc-foot">
+                <output id="sensPreview" for="sensInput sensDpi"></output>
+                <button type="button" id="sensApply" class="ghost" disabled data-i18n="calc.apply">Aplicar</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
 
-  <footer>
-    <div id="bar" hidden><div id="fill"></div></div>
-    <p id="status"></p>
-    <p id="version"></p>
+        <fieldset class="group" id="modsGroup">
+          <legend data-i18n="set.mods">Mejoras del cliente</legend>
+          <div class="item wide mods-head">
+            <label class="check"><input id="clientmods" type="checkbox"><span data-i18n="set.mods.on">Activadas</span></label>
+            <p class="hint" data-i18n="set.mods.hint">Resoluciones de más de 1920 × 1200, más de 60 FPS, ratón sin tope de giro y los ajustes de abajo. Desactivadas, el juego queda como el original.</p>
+          </div>
+          <div class="item fov">
+            <label for="fov" data-i18n="set.fov">Campo de visión</label>
+            <div class="fov-row">
+              <input id="fov" type="range" min="0" max="9" step="1" value="0" aria-describedby="fovHint">
+              <output id="fovOut" for="fov"></output>
+            </div>
+            <p class="hint" id="fovHint" data-i18n="set.fov.hint">Horizontal, al caminar o correr (en 16:9). Las miras conservan su zoom.</p>
+          </div>
+          <div class="item cone-box">
+            <svg id="cone" viewBox="0 0 280 150" role="img" aria-labelledby="coneTitle">
+              <title id="coneTitle"></title>
+              <g class="rings"></g>
+              <g class="ticks"></g>
+              <path class="stock"/>
+              <path class="wedge"/>
+              <path class="edge"/>
+              <path class="lead"/>
+              <text class="now" id="coneNow"></text>
+              <text id="coneStock"></text>
+              <path class="you" d="M140 138l6 8h-12z"/>
+            </svg>
+          </div>
+          <div class="item">
+            <label for="maxfps" data-i18n="set.maxfps">Límite de FPS</label>
+            <select id="maxfps"></select>
+          </div>
+          <div class="item wide ads-head">
+            <span class="label" data-i18n="set.ads">Sensibilidad al apuntar</span>
+            <label class="check"><input id="focallength" type="checkbox"><span data-i18n="set.focal">Escalar por distancia focal</span></label>
+            <p class="hint" data-i18n="set.focal.hint">Mantiene la misma distancia de ratón por distancia en pantalla al apuntar, en lugar de la curva original del juego.</p>
+          </div>
+          <div class="item">
+            <label for="adsmult" data-i18n="set.adsmult">Multiplicador con mira</label>
+            <input id="adsmult" type="number" min="0.1" max="3.0" step="0.05" placeholder="1.0">
+          </div>
+          <div class="item">
+            <label for="scopemult" data-i18n="set.scopemult">Multiplicador con telescópica</label>
+            <input id="scopemult" type="number" min="0.1" max="3.0" step="0.05" placeholder="1.0">
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+    <aside class="operator">
+      <form id="form" autocomplete="off">
+        <div class="mode" role="radiogroup" aria-label="Cuenta" data-i18n-aria="acc.label">
+          <label><input type="radio" name="mode" id="modeLogin" checked><span data-i18n="acc.login">Entrar</span></label>
+          <label><input type="radio" name="mode" id="create"><span data-i18n="acc.create">Cuenta nueva</span></label>
+        </div>
+
+        <label for="name" data-i18n="acc.name">Nickname</label>
+        <input id="name" maxlength="16" spellcheck="false">
+
+        <label for="password" data-i18n="acc.password">Contraseña</label>
+        <input id="password" type="password">
+        <p class="hint" id="createHint" data-i18n="acc.create.hint" hidden>Gratis y sin correo. La contraseña, de 6 caracteres o más.</p>
+        <button type="button" id="forgot" class="link" data-i18n="acc.forgot">¿Olvidaste tu contraseña?</button>
+
+        <div id="inviteRow" hidden>
+          <label for="invite" data-i18n="acc.invite">Código de invitación</label>
+          <input id="invite" spellcheck="false" placeholder="XXXXX-XXXXX">
+        </div>
+
+        <button id="play" class="primary"><span id="playLabel" data-i18n="play">Jugar</span></button>
+      </form>
+
+      <form id="resetForm" autocomplete="off" hidden>
+        <div class="reset-head">
+          <h2 data-i18n="reset.title">Cambiar la contraseña</h2>
+          <button type="button" id="resetBack" class="link" data-i18n="reset.back">Volver</button>
+        </div>
+        <p class="hint" data-i18n="reset.intro">Pide un código a un administrador en Discord. Sirve una sola vez y caduca en 24 horas.</p>
+        <label for="resetName" data-i18n="acc.name">Nickname</label>
+        <input id="resetName" maxlength="16" spellcheck="false">
+        <label for="resetCode" data-i18n="reset.code">Código</label>
+        <input id="resetCode" spellcheck="false" placeholder="XXXXX-XXXXX">
+        <label for="resetPassword" data-i18n="reset.new">Contraseña nueva</label>
+        <input id="resetPassword" type="password">
+        <label for="resetPassword2" data-i18n="reset.again">Repite la contraseña nueva</label>
+        <input id="resetPassword2" type="password">
+        <button id="resetGo" class="primary"><span data-i18n="reset.go">Cambiar contraseña</span></button>
+      </form>
+
+      <div class="status" aria-live="polite">
+        <div class="gauge" id="gauge" hidden><div id="bar"><div id="fill"></div></div><output id="pct"></output></div>
+        <p id="status"></p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="rail">
+    <nav class="links" aria-label="Enlaces" data-i18n-aria="links.label">
+      <button type="button" class="ext" data-url="status" data-i18n="links.status">Estado del servidor</button>
+      <button type="button" class="ext" data-url="source" data-i18n="links.source">Código fuente</button>
+      <button type="button" class="ext support" data-url="support">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.5 2.6 8.2a3.1 3.1 0 0 1 0-4.4 3.1 3.1 0 0 1 4.4 0l1 1 1-1a3.1 3.1 0 0 1 4.4 0 3.1 3.1 0 0 1 0 4.4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        <span data-i18n="links.support">Apoyar el servidor</span>
+      </button>
+    </nav>
+    <p class="legal"><span data-i18n="legal">Proyecto de la comunidad, sin relación con Ubisoft.</span> <span id="version"></span></p>
   </footer>
-</main>
+</div>
 <script src="main.js"></script>
 </body>
 </html>

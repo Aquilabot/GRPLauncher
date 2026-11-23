@@ -7,7 +7,7 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [
-      { "label": "main", "title": "GRP Launcher", "width": 460, "height": 680, "resizable": false, "center": true }
+      { "label": "main", "title": "GRP Launcher", "width": 1000, "height": 620, "resizable": false, "center": true }
     ],
     "security": { "csp": null }
   },

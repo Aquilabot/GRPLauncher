@@ -6,12 +6,13 @@ se actualiza solo.
 
 PRIMERA VEZ
 1. Descomprime esta carpeta donde quieras (por ejemplo en Documentos) y abre GRPLauncher.exe.
-2. Marca "Crear cuenta nueva", elige tu nickname (3 a 16 letras, números, - o _) y una contraseña de 6
+2. Elige "Cuenta nueva" a la derecha, escribe tu nickname (3 a 16 letras, números, - o _) y una contraseña de 6
    caracteres o más.
 3. Pulsa CREAR CUENTA Y JUGAR. La primera vez descarga el juego (unos 4 GB) automáticamente.
 
 LAS SIGUIENTES VECES
-Nickname, contraseña y JUGAR.
+Nickname, contraseña y JUGAR. El launcher está en español y en inglés: se cambia con ES / EN, arriba a la
+derecha.
 
 SI WINDOWS O EL ANTIVIRUS LO BLOQUEAN
 El programa no está firmado todavía, así que Windows desconfía de él la primera vez.
@@ -36,7 +37,7 @@ pulses JUGAR, el launcher lo instala desde la carpeta del juego: Windows pide pe
 (acéptalo) y tarda un momento. Si Windows ofrece instalar ".NET Framework 3.5", puedes omitirlo: el juego
 no lo necesita. Si la instalación falla, ejecuta a mano DXSETUP.exe de la carpeta DXRedist del juego.
 
-OPCIONES
+AJUSTES (pestaña "Ajustes", arriba)
 - Carpeta del juego: dónde se instala. Por defecto, %LOCALAPPDATA%\GRP\Ghost Recon Phantoms.
 - Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en
   ventana.
@@ -44,10 +45,10 @@ OPCIONES
   "Calcular" para convertir desde cm por vuelta (360°) + DPI o desde otro juego (The Finals, CS2/Apex,
   Valorant, Overwatch 2/CoD, Fortnite o Rainbow Six Siege). Vacío conserva la sensibilidad del juego.
 - Mejoras del cliente (activadas por defecto): el launcher pone un archivo nuestro, version.dll, en la
-  carpeta del juego. Con él, Opciones > Vídeo ofrece resoluciones de más de 1920 x 1200, el juego pasa de
+  carpeta del juego. Con él, Opciones > Vídeo del juego ofrece resoluciones de más de 1920 x 1200, el juego pasa de
   60 FPS, se elimina el límite de giro rápido del ratón por fotograma y puedes ajustar el campo de visión
   (FOV, de 70° a 110°), el escalado de sensibilidad por distancia focal y los multiplicadores al apuntar
-  (ADS y mira telescópica). El límite de FPS se elige al lado: "Automático" usa la frecuencia de tu monitor
+  (con mira y con telescópica). El límite de FPS se elige ahí mismo: "Automático" usa la frecuencia de tu monitor
   (hasta 240). Si las desactivas, el launcher borra ese archivo y el juego queda como el original.
 - Vulkan (DXVK) (activado por defecto): el juego dibuja con Vulkan a través de DXVK, como en Linux. El
   launcher pone d3d9.dll de DXVK en la carpeta del juego (con su licencia, DXVK-LICENSE.txt) solo si tu

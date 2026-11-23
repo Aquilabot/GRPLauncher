@@ -1,0 +1,405 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-23T14:03:51.311530Z",
+  "title": "Design System: GRP Launcher",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Night Ground",
+        "canonical": "#091015",
+        "tonalRamp": [
+          "#172936",
+          "#264459",
+          "#365f7d",
+          "#457aa1",
+          "#5e94ba",
+          "#82acc9",
+          "#b8cfe0",
+          "#edf3f7"
+        ]
+      },
+      "deep": {
+        "role": "neutral",
+        "displayName": "Well",
+        "canonical": "#060b0f",
+        "tonalRamp": [
+          "#162837",
+          "#24435b",
+          "#335d80",
+          "#4278a4",
+          "#5b92bd",
+          "#80aacc",
+          "#b6cee2",
+          "#edf3f8"
+        ]
+      },
+      "plate": {
+        "role": "neutral",
+        "displayName": "Plate",
+        "canonical": "#0f1a21",
+        "tonalRamp": [
+          "#182935",
+          "#284558",
+          "#38617b",
+          "#487c9e",
+          "#6196b7",
+          "#84adc7",
+          "#b9d0df",
+          "#edf3f7"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#1f3b46",
+        "tonalRamp": [
+          "#172d35",
+          "#274a58",
+          "#37687c",
+          "#46869f",
+          "#60a0b9",
+          "#83b5c8",
+          "#b8d5e0",
+          "#edf4f7"
+        ]
+      },
+      "line-hi": {
+        "role": "neutral",
+        "displayName": "Hairline Lit",
+        "canonical": "#3b7384",
+        "tonalRamp": [
+          "#182e35",
+          "#274d58",
+          "#376b7b",
+          "#478a9f",
+          "#60a4b8",
+          "#84b8c8",
+          "#b9d6df",
+          "#edf5f7"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#e4eef1",
+        "tonalRamp": [
+          "#1a2d32",
+          "#2c4b54",
+          "#3d6876",
+          "#4e8697",
+          "#68a0b1",
+          "#89b5c2",
+          "#bcd5dc",
+          "#eef4f6"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "#a3c0c8",
+        "tonalRamp": [
+          "#1d2c30",
+          "#304950",
+          "#436670",
+          "#568390",
+          "#6f9da9",
+          "#8fb2bc",
+          "#bfd3d9",
+          "#eff4f5"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "#7397a1",
+        "tonalRamp": [
+          "#1f2a2e",
+          "#33474c",
+          "#48636b",
+          "#5c7f89",
+          "#7699a3",
+          "#94b0b7",
+          "#c2d2d6",
+          "#f0f4f5"
+        ]
+      },
+      "signal": {
+        "role": "primary",
+        "displayName": "Cross-Com Cyan",
+        "canonical": "#72e0ea",
+        "tonalRamp": [
+          "#0a3e43",
+          "#11676f",
+          "#17909b",
+          "#1ebac8",
+          "#37d3e1",
+          "#64dde8",
+          "#a6ebf2",
+          "#e9fafc"
+        ]
+      },
+      "signal-hover": {
+        "role": "primary",
+        "displayName": "Signal Hover",
+        "canonical": "#a2f0f6",
+        "tonalRamp": [
+          "#074146",
+          "#0b6d74",
+          "#1098a3",
+          "#14c4d1",
+          "#2eddeb",
+          "#5ce5ef",
+          "#a2f0f6",
+          "#e8fbfd"
+        ]
+      },
+      "signal-pressed": {
+        "role": "primary",
+        "displayName": "Signal Pressed",
+        "canonical": "#5cc9d3",
+        "tonalRamp": [
+          "#10393c",
+          "#1b5e64",
+          "#26848d",
+          "#31aab5",
+          "#4ac3ce",
+          "#72d0d9",
+          "#afe4e9",
+          "#ebf8fa"
+        ]
+      },
+      "signal-ink": {
+        "role": "neutral",
+        "displayName": "Signal Ink",
+        "canonical": "#04171b",
+        "tonalRamp": [
+          "#0a3943",
+          "#105f6f",
+          "#17849b",
+          "#1eaac8",
+          "#37c4e1",
+          "#64d1e8",
+          "#a6e5f2",
+          "#e9f8fc"
+        ]
+      },
+      "fresh": {
+        "role": "secondary",
+        "displayName": "New Amber",
+        "canonical": "#f0b655",
+        "tonalRamp": [
+          "#462e06",
+          "#754d0a",
+          "#a46c0e",
+          "#d38b13",
+          "#eca42c",
+          "#f1b95b",
+          "#f7d7a1",
+          "#fdf5e8"
+        ]
+      },
+      "fault": {
+        "role": "secondary",
+        "displayName": "Fault Coral",
+        "canonical": "#ff7a66",
+        "tonalRamp": [
+          "#4c0a00",
+          "#801100",
+          "#b21700",
+          "#e61e00",
+          "#ff381a",
+          "#ff644d",
+          "#ffa699",
+          "#ffe9e5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "brand": {
+        "displayName": "Brand",
+        "purpose": "The single h1 in the top bar."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Section titles and the server tag name."
+      },
+      "play": {
+        "displayName": "Play",
+        "purpose": "The play plate label."
+      },
+      "label-caps": {
+        "displayName": "Label caps",
+        "purpose": "Tabs, ghost buttons, switches, figures."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Sentences and values."
+      },
+      "field-label": {
+        "displayName": "Field label",
+        "purpose": "Form labels and secondary text."
+      },
+      "hint": {
+        "displayName": "Hint",
+        "purpose": "Explanations under controls."
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "The system is flat; only inset 2px signal underline (account mode) and inset focus ring (play plate)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "The single easing curve."
+      },
+      {
+        "name": "state",
+        "value": ".12s to .28s",
+        "purpose": "Color, border and transform responses."
+      },
+      {
+        "name": "arrival",
+        "value": ".42s wipe, .9s terrain scan, tag at .75s",
+        "purpose": "The one authored moment on the home view."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Play plate",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Chamfered cyan plate; one per form.",
+      "html": "<button class=\"ds-play\">JUGAR</button>",
+      "css": ".ds-play{height:54px;width:100%;border:0;background:#72e0ea;color:#04171b;font:600 23px/1 'Barlow Condensed',system-ui,sans-serif;letter-spacing:.2em;text-indent:.2em;text-transform:uppercase;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);transition:background-color .15s,transform .12s}.ds-play:hover{background:#a2f0f6}.ds-play:active{background:#5cc9d3;transform:translateY(1px)}.ds-play:focus-visible{outline:none;box-shadow:inset 0 0 0 2px #04171b,inset 0 0 0 3px #72e0ea}"
+    },
+    {
+      "name": "Ghost button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action beside a field.",
+      "html": "<button class=\"ds-ghost\">Buscar</button>",
+      "css": ".ds-ghost{height:36px;padding:0 14px;background:none;border:1px solid #3b7384;color:#e4eef1;font:600 14px/1 'Barlow Condensed',system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;transition:background-color .15s,border-color .15s}.ds-ghost:hover{border-color:#72e0ea;background:rgba(114,224,234,.08)}.ds-ghost:active{background:rgba(114,224,234,.18)}.ds-ghost:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}"
+    },
+    {
+      "name": "Text input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Square well with hairline border.",
+      "html": "<input class=\"ds-input\" value=\"Nickname\">",
+      "css": ".ds-input{width:100%;height:36px;padding:0 10px;background:#060b0f;color:#e4eef1;border:1px solid #1f3b46;border-radius:0;font:400 15px 'Barlow Semi Condensed',system-ui,sans-serif;caret-color:#72e0ea;transition:border-color .15s}.ds-input:hover{border-color:#3b7384}.ds-input:focus-visible{border-color:#72e0ea;outline:none}"
+    },
+    {
+      "name": "Account mode switch",
+      "kind": "chip",
+      "refersTo": "mode-switch-selected",
+      "description": "Two-cell segmented radio; selected cell is filled with an inset cyan underline.",
+      "html": "<div class=\"ds-mode\"><span class=\"on\">ENTRAR</span><span>CUENTA NUEVA</span></div>",
+      "css": ".ds-mode{display:grid;grid-template-columns:1fr 1fr;border:1px solid #3b7384}.ds-mode span{display:grid;place-items:center;height:34px;color:#a3c0c8;font:600 14px/1 'Barlow Condensed',system-ui,sans-serif;letter-spacing:.1em}.ds-mode span+span{border-left:1px solid #3b7384}.ds-mode span:hover{color:#e4eef1}.ds-mode .on{background:#1f3b46;color:#e4eef1;box-shadow:inset 0 -2px #72e0ea}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "operator-column",
+      "description": "Top-bar tabs with a scaling cyan underline.",
+      "html": "<nav class=\"ds-tabs\"><button class=\"on\">INICIO</button><button>AJUSTES</button></nav>",
+      "css": ".ds-tabs{display:flex;height:48px;border-bottom:1px solid #1f3b46}.ds-tabs button{position:relative;background:none;border:0;padding:0 16px;color:#7397a1;font:600 15px/1 'Barlow Condensed',system-ui,sans-serif;letter-spacing:.12em;transition:color .18s}.ds-tabs button:hover,.ds-tabs .on{color:#e4eef1}.ds-tabs button::after{content:'';position:absolute;left:16px;right:16px;bottom:-1px;height:2px;background:#72e0ea;transform:scaleX(0);transform-origin:left;transition:transform .28s}.ds-tabs .on::after{transform:scaleX(1)}.ds-tabs button:focus-visible{outline:2px solid #72e0ea;outline-offset:-6px}"
+    },
+    {
+      "name": "Progress gauge",
+      "kind": "custom",
+      "refersTo": "input",
+      "description": "Ticked 10px track with a cyan fill and a figure.",
+      "html": "<div class=\"ds-gauge\"><div class=\"bar\"><i></i></div><output>42%</output></div>",
+      "css": ".ds-gauge{display:flex;align-items:center;gap:10px}.ds-gauge .bar{position:relative;flex:1;height:10px;border:1px solid #3b7384;background:#060b0f;overflow:hidden}.ds-gauge .bar::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),#091015 calc(10% - 1px) 10%)}.ds-gauge i{display:block;height:100%;width:42%;background:#72e0ea}.ds-gauge output{width:44px;text-align:right;color:#e4eef1;font:600 15px/1 'Barlow Condensed',system-ui,sans-serif;letter-spacing:.06em}"
+    },
+    {
+      "name": "Release note",
+      "kind": "card",
+      "refersTo": "body",
+      "description": "Meta column plus title and dash-bulleted lines.",
+      "html": "<article class=\"ds-note\"><div class=\"m\"><span class=\"d\">22 nov</span><span class=\"n\">NUEVO</span></div><div><h3>Server update</h3><ul><li>Fixed a thing</li></ul></div></article>",
+      "css": ".ds-note{display:grid;grid-template-columns:92px 1fr;gap:0 14px;padding:10px 0 11px;border-top:1px solid #1f3b46;color:#e4eef1;font:400 15px/1.4 'Barlow Semi Condensed',system-ui,sans-serif}.ds-note .d{display:block;color:#a3c0c8;font-size:13px}.ds-note .n{display:block;color:#f0b655;font:600 12px/1.5 'Barlow Condensed',system-ui,sans-serif;letter-spacing:.12em}.ds-note h3{margin:0;font-weight:600;font-size:15px}.ds-note ul{margin:4px 0 0;padding:0;list-style:none;color:#a3c0c8;font-size:14px}.ds-note li{position:relative;padding-left:13px}.ds-note li::before{content:'';position:absolute;left:1px;top:.62em;width:5px;height:1px;background:#3b7384}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cross-Com Visor",
+    "overview": "The window reads as the game's own targeting visor, not a store page. A blue-black ground carries thin teal hairlines and line readouts; labels attach to what they describe through leader lines. One cyan signal marks what is live, chosen or focused. Amber marks what is new. Red-orange marks what failed.",
+    "keyCharacteristics": [
+      "Blue-black ground, teal hairlines, one cyan signal; amber and red-orange only for state.",
+      "Square everything; the 9px chamfer belongs to the play plate only.",
+      "Two Barlow cuts: Condensed SemiBold for uppercase labels, Semi Condensed for reading text.",
+      "Tabular, lining figures everywhere.",
+      "Flat: no shadows, blur, glow or glass.",
+      "Motion is spent in one place: the terrain scan and server tag."
+    ],
+    "rules": [
+      {
+        "name": "The One Signal Rule",
+        "body": "Cyan means live, chosen or focused; never decoration or a second brand color.",
+        "section": "colors"
+      },
+      {
+        "name": "The State Colors Rule",
+        "body": "Amber means new, coral means failed, for those meanings only.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hue Family Rule",
+        "body": "Every neutral and text tone stays in the teal-blue family; no pure grey or white.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Faces Rule",
+        "body": "Uppercase tracked text is Barlow Condensed; sentence-case text is Barlow Semi Condensed.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Figures stay tabular and lining so values do not shift as they change.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Rule",
+        "body": "Surfaces never lift; a state change is a color, border color or 1px nudge.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Separation is a 1px line or line-hi border; dashed means disabled.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Moment Rule",
+        "body": "The terrain-and-tag reveal is the only choreographed animation.",
+        "section": "motion"
+      }
+    ],
+    "dos": [
+      "Do use signal only for live, chosen or focused things, and fresh and fault only for new and failed.",
+      "Do keep every control square, 36px high (34 for the account switch), with a 1px hairline border.",
+      "Do keep disabled as ink-3 text with a dashed border, never as opacity alone.",
+      "Do keep the operator column and the play plate on screen on every view.",
+      "Do keep the status block at a fixed height with plain, translated errors.",
+      "Do keep a visible signal focus ring on every interactive element.",
+      "Do keep the page fully local: bundled fonts, inline SVG, no external requests."
+    ],
+    "donts": [
+      "Don't add shadows, blur, glow, glass, decorative gradients or rounded corners.",
+      "Don't put key art, a hero image, Ubisoft artwork or a game logotype anywhere.",
+      "Don't add a second accent color or a light theme.",
+      "Don't put a donation or promotional element between the player and the play plate.",
+      "Don't set sentences in uppercase or labels in the text face.",
+      "Don't add breakpoints; the window is fixed.",
+      "Don't add entrance animations to new surfaces.",
+      "Don't drop hint or placeholder text below ink-3."
+    ]
+  }
+}

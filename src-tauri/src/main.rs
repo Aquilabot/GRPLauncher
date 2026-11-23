@@ -9,7 +9,8 @@
 //   GRPLauncher.exe --vulkan-check                    prints "ok <device>" or "no <why>": can DXVK run here (Windows)
 //
 // Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language.
-// What the player chose last (never the password) and the last release note seen: %APPDATA%\GRPLauncher\settings.txt;
+// What the player chose last (never the password), the window's language ("lang": es or en) and the last release note
+// seen: %APPDATA%\GRPLauncher\settings.txt;
 // log: launcher.log there.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -36,6 +37,7 @@ struct State {
     scopemult: String,  // empty or "1.0": stock multiplier
     dxvk: bool,
     server: String,
+    lang: String,       // "es", "en", or empty the first time: the window picks by the system's language
 }
 
 struct SavedClientMods {
@@ -83,6 +85,33 @@ fn get_state() -> State {
         scopemult: cm.scopemult,
         dxvk: saved_dxvk(&s),
         server: core::config().server.clone(),
+        lang: s.get("lang").cloned().unwrap_or_default(),
+    }
+}
+
+/// The window's language, kept for next time; the texts this side writes follow it.
+#[tauri::command]
+fn set_lang(lang: String) {
+    let lang = if lang == "en" { "en" } else { "es" };
+    core::set_english(lang == "en");
+    core::save_settings(&[("lang", lang.to_string())]);
+}
+
+/// The links of the window's bottom rail, by name: only these addresses are ever opened, in the player's browser.
+#[tauri::command]
+fn open_link(which: String) {
+    let url = match which.as_str() {
+        "status" => "https://grp.limacashout.pro/status/",
+        "source" => "https://github.com/Aquilabot/GRPLauncher",
+        "support" => "https://ko-fi.com/aquilabot",
+        _ => return,
+    };
+    #[cfg(windows)]
+    let r = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", url]).spawn();
+    #[cfg(not(windows))]
+    let r = std::process::Command::new("xdg-open").arg(url).spawn();
+    if let Err(e) = r {
+        core::log(&format!("link {} not opened: {}", which, e));
     }
 }
 
@@ -151,7 +180,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         let mut need_invite = false;
         let invite = args.invite.as_deref().map(str::trim).unwrap_or("");
         if args.create || !invite.is_empty() {
-            progress("Creando la cuenta...", -1.0);
+            progress(core::tr("Creando la cuenta...", "Creating the account..."), -1.0);
             let r = core::register(invite, &args.name, &args.password);
             core::log(&format!("register {}: {}", args.name, r));
             if r != "OK" {
@@ -208,7 +237,7 @@ fn mark_notes_seen(id: u32) {
 #[tauri::command]
 fn pick_folder(app: tauri::AppHandle, current: String) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
-    let mut d = app.dialog().file().set_title("Carpeta donde está o se instalará el juego (unos 4 GB)");
+    let mut d = app.dialog().file().set_title(core::tr("Carpeta donde está o se instalará el juego (unos 4 GB)", "Folder where the game is, or will be installed (about 4 GB)"));
     if std::path::Path::new(&current).is_dir() {
         d = d.set_directory(&current);
     }
@@ -243,7 +272,7 @@ fn main() {
     #[cfg(windows)]
     if inside_temp_folder() {
         core::log("started from the temporary folder (inside a zip opened with WinRAR or Explorer): asked to extract it first");
-        let text: Vec<u16> = "GRP Launcher se abrió desde dentro del archivo .zip.\n\nPrimero extrae todo el contenido del .zip en una carpeta (por ejemplo en Documentos) y abre GRPLauncher.exe desde ahí."
+        let text: Vec<u16> = "GRP Launcher se abrió desde dentro del archivo .zip.\n\nPrimero extrae todo el contenido del .zip en una carpeta (por ejemplo en Documentos) y abre GRPLauncher.exe desde ahí.\n\nGRP Launcher was opened from inside the .zip file.\n\nExtract everything in the .zip to a folder first (Documents, for example) and open GRPLauncher.exe from there."
             .encode_utf16()
             .chain(Some(0))
             .collect();
@@ -306,9 +335,10 @@ fn main() {
         }
         return;
     }
+    core::set_english(core::settings().get("lang").map(String::as_str) == Some("en"));
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, get_notes, mark_notes_seen, play, pick_folder, reset_password])
+        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, play, pick_folder, reset_password])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");
 }

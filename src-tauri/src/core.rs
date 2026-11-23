@@ -7,6 +7,23 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
+/// The language of what the launcher tells the player: Spanish, the server's home language, unless the window chose
+/// English ("lang" in settings.txt, set_english). The log stays in English either way.
+static ENGLISH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_english(on: bool) {
+    ENGLISH.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn english() -> bool {
+    ENGLISH.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// One of the two texts, by the player's language.
+pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
+    if english() { en } else { es }
+}
+
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
 pub const VERSION: u32 = 12;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
@@ -190,13 +207,15 @@ fn banned(rest: &str) -> String {
     let (until, reason) = rest.split_once(' ').unwrap_or((rest, ""));
     let until: u64 = until.parse().unwrap_or(0);
     let when = if until == 0 {
-        "de forma permanente.".to_string()
+        tr("de forma permanente.", "for good.").to_string()
     } else {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        format!("y volverá a estar activa en {}.", left(until.saturating_sub(now)))
+        let span = left(until.saturating_sub(now));
+        if english() { format!("and will be active again in {}.", span) } else { format!("y volverá a estar activa en {}.", span) }
     };
     let reason = reason.trim();
-    format!("Tu cuenta está suspendida {}{}", when, if reason.is_empty() { String::new() } else { format!("\nMotivo: {}", reason) })
+    let why = if reason.is_empty() { String::new() } else { format!("\n{}: {}", tr("Motivo", "Reason"), reason) };
+    format!("{} {}{}", tr("Tu cuenta está suspendida", "Your account is suspended"), when, why)
 }
 
 /// A time span in words, the two largest units: "6 días y 23 horas", "5 horas y 1 minuto", "12 minutos".
@@ -205,28 +224,28 @@ fn left(seconds: u64) -> String {
     let minutes = seconds.div_ceil(60).max(1);
     let (d, h, m) = (minutes / 1440, minutes % 1440 / 60, minutes % 60);
     let parts = if d > 0 {
-        vec![unit(d, "día", "días"), unit(h, "hora", "horas")]
+        vec![unit(d, tr("día", "day"), tr("días", "days")), unit(h, tr("hora", "hour"), tr("horas", "hours"))]
     } else if h > 0 {
-        vec![unit(h, "hora", "horas"), unit(m, "minuto", "minutos")]
+        vec![unit(h, tr("hora", "hour"), tr("horas", "hours")), unit(m, tr("minuto", "minute"), tr("minutos", "minutes"))]
     } else {
-        vec![unit(m, "minuto", "minutos")]
+        vec![unit(m, tr("minuto", "minute"), tr("minutos", "minutes"))]
     };
-    parts.into_iter().filter(|p| !p.starts_with("0 ")).collect::<Vec<_>>().join(" y ")
+    parts.into_iter().filter(|p| !p.starts_with("0 ")).collect::<Vec<_>>().join(tr(" y ", " and "))
 }
 
 pub fn explain(answer: &str) -> String {
     match answer {
-        "ERR code" => "El código no es válido, ya se usó o caducó. Pide uno nuevo a un administrador.".into(),
+        "ERR code" => tr("El código no es válido, ya se usó o caducó. Pide uno nuevo a un administrador.", "The code is not valid, was already used or has expired. Ask an administrator for a new one.").into(),
         a if a.starts_with("ERR banned ") => banned(&a[11..]),
-        "ERR invite" => "Esta cuenta requiere un código de invitación válido o el código ya se usó.".into(),
-        "ERR name" => "El nickname debe tener de 3 a 16 caracteres: letras, números, guion y guion bajo.".into(),
-        "ERR taken" => "Ese nickname ya está en uso.".into(),
-        "ERR login" => "Nickname o contraseña incorrectos.".into(),
-        "ERR slow" => "Demasiados intentos. Espera un minuto.".into(),
-        "ERR update" => "Este launcher es antiguo. Ciérralo y vuelve a abrirlo para que se actualice.".into(),
-        a if a.starts_with("NET ") => format!("No se pudo conectar con el servidor: {}", &a[4..]),
-        a if a.starts_with("ERR ") => format!("El servidor rechazó la solicitud ({}).", a),
-        a => format!("Respuesta inesperada del servidor: {}", a.chars().take(80).collect::<String>()),
+        "ERR invite" => tr("Esta cuenta requiere un código de invitación válido o el código ya se usó.", "This account needs a valid invitation code, or the code was already used.").into(),
+        "ERR name" => tr("El nickname debe tener de 3 a 16 caracteres: letras, números, guion y guion bajo.", "The nickname takes 3 to 16 characters: letters, numbers, hyphen and underscore.").into(),
+        "ERR taken" => tr("Ese nickname ya está en uso.", "That nickname is already taken.").into(),
+        "ERR login" => tr("Nickname o contraseña incorrectos.", "Wrong nickname or password.").into(),
+        "ERR slow" => tr("Demasiados intentos. Espera un minuto.", "Too many attempts. Wait a minute.").into(),
+        "ERR update" => tr("Este launcher es antiguo. Ciérralo y vuelve a abrirlo para que se actualice.", "This launcher is out of date. Close it and open it again so it updates.").into(),
+        a if a.starts_with("NET ") => format!("{}: {}", tr("No se pudo conectar con el servidor", "Could not reach the server"), &a[4..]),
+        a if a.starts_with("ERR ") => format!("{} ({}).", tr("El servidor rechazó la solicitud", "The server refused the request"), a),
+        a => format!("{}: {}", tr("Respuesta inesperada del servidor", "Unexpected answer from the server"), a.chars().take(80).collect::<String>()),
     }
 }
 
@@ -303,7 +322,7 @@ fn download(url: &str, file: &Path, size: u64, sha: &str, progress: &mut dyn FnM
             }
         }
     }
-    Err(format!("No se pudo descargar {}: {}", file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), last))
+    Err(format!("{} {}: {}", tr("No se pudo descargar", "Could not download"), file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), last))
 }
 
 /// Replaces this program when the server has a newer one, and starts it again. /launcher/version.txt holds
@@ -389,7 +408,7 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
         }
     }
     if entries.is_empty() {
-        return Err("El servidor no publicó la lista de archivos del juego.".into());
+        return Err(tr("El servidor no publicó la lista de archivos del juego.", "The server did not publish the list of game files.").into());
     }
     log(&format!("vault {}: {} files", vault, entries.len()));
     std::fs::create_dir_all(game_dir).map_err(|e| format!("No se pudo crear la carpeta del juego:\n{}\n{}", game_dir.display(), e))?;
@@ -408,7 +427,7 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
     let mut need = Vec::new();
     for (i, e) in entries.iter().enumerate() {
         if i % 20 == 0 {
-            progress("Comprobando archivos del juego...", i as f64 / entries.len() as f64);
+            progress(tr("Comprobando archivos del juego...", "Checking the game files..."), i as f64 / entries.len() as f64);
         }
         let file = local(e);
         if !e.must_match && file.exists() {
@@ -444,7 +463,7 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
         let start = done;
         let mut step = |n: u64| {
             done += n;
-            progress(&format!("Descargando {}  ({} de {} MB)", name, done >> 20, total >> 20), fraction(done));
+            progress(&format!("{} {}  ({} {} {} MB)", tr("Descargando", "Downloading"), name, done >> 20, tr("de", "of"), total >> 20), fraction(done));
         };
         if let Err(err) = download(&url, &file, e.size, &e.sha, &mut step) {
             save_cache(&cache);
@@ -547,7 +566,7 @@ fn set_client_mods(vault_key: Option<&str>, game_dir: &Path, mods: Option<Client
         return;
     };
     if let Some(key) = vault_key {
-        progress("Comprobando las mejoras del cliente...", -1.0);
+        progress(tr("Comprobando las mejoras del cliente...", "Checking the client improvements..."), -1.0);
         if let Err(e) = fetch_client_dll(key, &dll) {
             log(&format!("client dll not updated: {}", e));
         }
@@ -615,7 +634,7 @@ fn set_dxvk(vault_key: Option<&str>, game_dir: &Path, on: bool, progress: &dyn F
         remove_files("vulkan (dxvk) off", &dxvk_files(game_dir));
         return;
     }
-    progress("Comprobando Vulkan...", -1.0);
+    progress(tr("Comprobando Vulkan...", "Checking Vulkan..."), -1.0);
     let device = match vulkan_ready() {
         Ok(device) => device,
         Err(why) => {
@@ -837,8 +856,11 @@ fn dxvk_failure(dxvk_log: Option<&str>) -> Option<String> {
 }
 
 #[cfg(windows)]
-const DXVK_FAILED: &str = "El juego no pudo abrirse con Vulkan (DXVK) en este equipo. Desactivamos la opción «Vulkan (DXVK)» en \
-Opciones, así que la próxima vez se abrirá con DirectX 9. Pulsa JUGAR otra vez.";
+const DXVK_FAILED: &str = "El juego no pudo abrirse con Vulkan (DXVK) en este equipo. Desactivamos «Vulkan (DXVK)» en Ajustes, \
+así que la próxima vez se abrirá con DirectX 9. Pulsa JUGAR otra vez.";
+#[cfg(windows)]
+const DXVK_FAILED_EN: &str = "The game could not open with Vulkan (DXVK) on this computer. We turned “Vulkan (DXVK)” off in \
+Settings, so next time it opens with DirectX 9. Press PLAY again.";
 
 /// Which d3d9.dll Proton put in the prefix for the 32-bit game: DXVK (Vulkan), as expected, or Wine's own WineD3D
 /// (PROTON_USE_WINED3D, or a broken prefix).
@@ -975,7 +997,7 @@ fn set_resolution(game_dir: &Path, o: &PlayOptions) {
 
 /// Signs in, brings the game folder up to date and runs the game until it exits.
 pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
-    progress("Iniciando sesión...", -1.0);
+    progress(tr("Iniciando sesión...", "Signing in..."), -1.0);
     let answer = login(name, password);
     let a: Vec<&str> = answer.split(' ').collect();
     if a.len() < 3 || a[0] != "OK" {
@@ -987,7 +1009,7 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
         sync_game(a[3], game_dir, progress)?;
     }
     if !game_dir.join(GAME_EXE).is_file() {
-        return Err(format!("No se encontró el juego en:\n{}", game_dir.join(GAME_EXE).display()));
+        return Err(format!("{}:\n{}", tr("No se encontró el juego en", "The game was not found in"), game_dir.join(GAME_EXE).display()));
     }
     set_resolution(game_dir, o);
     set_mouse_sensitivity(game_dir, o.mouse_sens);
@@ -1038,10 +1060,10 @@ fn ensure_directx(game_dir: &Path, progress: &dyn Fn(&str, f64)) -> Result<(), S
     let setup = game_dir.join("DXRedist").join("DXSETUP.exe");
     log(&format!("directx: {} missing in {}", missing.join(", "), dir.display()));
     if !setup.is_file() {
-        return Err(format!("Falta DirectX 9 ({}) y su instalador no está en la carpeta del juego:\n{}", missing.join(", "), setup.display()));
+        return Err(format!("{} ({}) {}:\n{}", tr("Falta DirectX 9", "DirectX 9 is missing"), missing.join(", "), tr("y su instalador no está en la carpeta del juego", "and its installer is not in the game folder"), setup.display()));
     }
-    progress("Instalando DirectX 9 (solo la primera vez)... Si Windows ofrece instalar .NET Framework 3.5, puedes omitirlo.", -1.0);
-    let by_hand = format!("Para instalarlo a mano, ejecuta DXSETUP.exe de la carpeta DXRedist del juego y vuelve a pulsar Jugar:\n{}", setup.display());
+    progress(tr("Instalando DirectX 9 (solo la primera vez)... Si Windows ofrece instalar .NET Framework 3.5, puedes omitirlo.", "Installing DirectX 9 (the first time only)... If Windows offers to install .NET Framework 3.5, you can skip it."), -1.0);
+    let by_hand = format!("{}:\n{}", tr("Para instalarlo a mano, ejecuta DXSETUP.exe de la carpeta DXRedist del juego y vuelve a pulsar Jugar", "To install it by hand, run DXSETUP.exe from the game's DXRedist folder and press Play again"), setup.display());
     match run_elevated(&setup, "/silent") {
         Ok(0) => {
             log("directx: DXSETUP finished");
@@ -1050,15 +1072,15 @@ fn ensure_directx(game_dir: &Path, progress: &dyn Fn(&str, f64)) -> Result<(), S
         }
         Ok(code) => {
             log(&format!("directx: DXSETUP exit code {}", code));
-            Err(format!("La instalación de DirectX 9 falló (código {}). El juego no puede abrirse sin él.\n{}", code as i32, by_hand))
+            Err(format!("{} ({}). {}\n{}", tr("La instalación de DirectX 9 falló", "Installing DirectX 9 failed"), code as i32, tr("El juego no puede abrirse sin él.", "The game cannot open without it."), by_hand))
         }
         Err(windows_sys::Win32::Foundation::ERROR_CANCELLED) => {
             log("directx: UAC prompt declined");
-            Err(format!("El juego necesita DirectX 9 y su instalación pide permiso de administrador. Vuelve a pulsar Jugar y acepta el aviso de Windows.\n{}", by_hand))
+            Err(format!("{}\n{}", tr("El juego necesita DirectX 9 y su instalación pide permiso de administrador. Vuelve a pulsar Jugar y acepta el aviso de Windows.", "The game needs DirectX 9, and installing it asks for administrator permission. Press Play again and accept the Windows prompt."), by_hand))
         }
         Err(e) => {
             log(&format!("directx: DXSETUP did not start, error {}", e));
-            Err(format!("No se pudo abrir el instalador de DirectX 9 (error {}).\n{}", e, by_hand))
+            Err(format!("{} (error {}).\n{}", tr("No se pudo abrir el instalador de DirectX 9", "The DirectX 9 installer could not be opened"), e, by_hand))
         }
     }
 }
@@ -1111,7 +1133,7 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     }
     crate::pipe::start(session.to_string());
     std::thread::sleep(Duration::from_millis(500));
-    progress("Abriendo el juego...", -1.0);
+    progress(tr("Abriendo el juego...", "Opening the game..."), -1.0);
     let c = config();
     let mut child = std::process::Command::new(game_dir.join(GAME_EXE))
         .current_dir(game_dir)
@@ -1126,7 +1148,7 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
             format!("No se pudo abrir el juego: {}", e)
         })?;
     log(&format!("game started, pid {}, on {}", child.id(), if dxvk { "Vulkan (DXVK)" } else { "Direct3D 9" }));
-    progress("Jugando. Esta ventana vuelve cuando cierres el juego.", -1.0);
+    progress(tr("Jugando. Esta ventana vuelve cuando cierres el juego.", "Playing. This window comes back when you close the game."), -1.0);
     playing();
     let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     log(&format!("game exited, code {}", code));
@@ -1136,7 +1158,7 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
             log(&format!("dxvk failed ({}): switched off, the next start uses Direct3D 9", why));
             remove_files("dxvk failed", &dxvk_files(game_dir));
             save_settings(&[("dxvk", "0".into())]);
-            return Err(DXVK_FAILED.into());
+            return Err(tr(DXVK_FAILED, DXVK_FAILED_EN).into());
         }
     }
     Ok(())
@@ -1147,7 +1169,7 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
 /// answers the pipe and starts the game. The Windows build is fetched from the server next to this program.
 #[cfg(not(windows))]
 pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
-    progress("Preparando Proton...", -1.0);
+    progress(tr("Preparando Proton...", "Getting Proton ready..."), -1.0);
     let helper = share_dir().join("GRPLauncher.exe");
     let _ = std::fs::create_dir_all(share_dir());
     let published = get_text(&format!("{}/launcher/version.txt", base_url()), 10).unwrap_or_default();
@@ -1164,7 +1186,7 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     let c = config();
     let prefix = if c.prefix.is_empty() { share_dir().join("prefix") } else { PathBuf::from(&c.prefix) };
     let win = |p: &Path| format!("Z:{}", p.to_string_lossy().replace('/', "\\"));
-    progress("Abriendo el juego...", -1.0);
+    progress(tr("Abriendo el juego...", "Opening the game..."), -1.0);
     let mut child = std::process::Command::new("umu-run")
         .env("WINEPREFIX", &prefix)
         .env("GAMEID", "umu-default")
@@ -1177,9 +1199,9 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
         .arg("--gamedir")
         .arg(win(game_dir))
         .spawn()
-        .map_err(|e| format!("No se pudo ejecutar umu-run (¿está instalado?): {}", e))?;
+        .map_err(|e| format!("{}: {}", tr("No se pudo ejecutar umu-run (¿está instalado?)", "Could not run umu-run (is it installed?)"), e))?;
     log(&format!("umu-run started, pid {}, prefix {}", child.id(), prefix.display()));
-    progress("Jugando. Esta ventana vuelve cuando cierres el juego.", -1.0);
+    progress(tr("Jugando. Esta ventana vuelve cuando cierres el juego.", "Playing. This window comes back when you close the game."), -1.0);
     playing();
     let running = std::sync::atomic::AtomicBool::new(true);
     let code = std::thread::scope(|s| {
