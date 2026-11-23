@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 10;
+pub const VERSION: u32 = 11;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -494,19 +494,58 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
 // ---- client improvements ----
 
 /// "Mejoras del cliente" switched on: our version.dll in the game folder, set by grp-client.ini next to it (more
-/// display modes in Options > Video, a frame cap other than 60). Switched off, neither file is there and the game is
-/// the original.
-#[derive(Clone, Copy)]
+/// display modes in Options > Video, a frame cap other than 60, unlocked mouse per-frame cap, custom hipfire FOV,
+/// focal-length ADS scaling, and ADS/scope sensitivity multipliers). Switched off, neither file is there and the game
+/// is the original.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ClientMods {
-    pub max_fps: Option<u32>, // None: the monitor's refresh rate (the DLL clamps it to 60-240)
+    pub max_fps: Option<u32>,    // None: the monitor's refresh rate (the DLL clamps it to 60-240)
+    pub fov: Option<u32>,        // None: stock (~79.3 deg horizontal at 16:9); Some(70..=110)
+    pub focal_length: bool,      // false: stock ADS curve; true: tan(cur_vfov/2) / tan(hip_vfov/2)
+    pub ads_mult: Option<f32>,   // None: 1.0x; Some(0.1..=3.0)
+    pub scope_mult: Option<f32>, // None: 1.0x; Some(0.1..=3.0)
 }
 
 const CLIENT_DLL: &str = "version.dll";
 const CLIENT_INI: &str = "grp-client.ini";
 
-/// The player's choice: on or off, and the frame cap as typed (a number; anything else is automatic).
-pub fn client_mods(on: bool, max_fps: &str) -> Option<ClientMods> {
-    on.then(|| ClientMods { max_fps: max_fps.trim().parse().ok() })
+fn parse_fov(s: &str) -> Option<u32> {
+    let v = s.trim().replace(',', ".").parse::<f32>().ok()?;
+    if !v.is_finite() || v <= 0.0 {
+        return None;
+    }
+    Some((v.round() as i32).clamp(70, 110) as u32)
+}
+
+fn parse_mult(s: &str) -> Option<f32> {
+    let v = s.trim().replace(',', ".").parse::<f32>().ok()?;
+    if !v.is_finite() || v <= 0.0 {
+        return None;
+    }
+    Some(v.clamp(0.1, 3.0))
+}
+
+/// The player's choice: on or off, plus frame cap, hipfire FOV, focal-length ADS scaling, and ADS/scope multipliers.
+pub fn client_mods(on: bool, max_fps: &str, fov: &str, focal_length: bool, ads_mult: &str, scope_mult: &str) -> Option<ClientMods> {
+    on.then(|| ClientMods {
+        max_fps: max_fps.trim().parse().ok(),
+        fov: parse_fov(fov),
+        focal_length,
+        ads_mult: parse_mult(ads_mult),
+        scope_mult: parse_mult(scope_mult),
+    })
+}
+
+fn format_client_ini(m: ClientMods) -> String {
+    let max_fps = m.max_fps.map(|n| n.to_string()).unwrap_or_default();
+    let fov = m.fov.map(|n| n.to_string()).unwrap_or_default();
+    let focal = if m.focal_length { 1 } else { 0 };
+    let ads = m.ads_mult.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "1.0".into());
+    let scope = m.scope_mult.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "1.0".into());
+    format!(
+        "[Client]\r\nMaxFps={}\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov={}\r\nFocalLengthScaling={}\r\nAdsMultiplier={}\r\nScopeMultiplier={}\r\n",
+        max_fps, fov, focal, ads, scope
+    )
 }
 
 /// Brings a DLL in the game folder up to the one published next to the vault: client/<name>.txt holds
@@ -544,9 +583,17 @@ fn set_client_mods(vault_key: Option<&str>, game_dir: &Path, mods: Option<Client
             log(&format!("client dll not updated: {}", e));
         }
     }
-    let max_fps = m.max_fps.map(|n| n.to_string()).unwrap_or_default();
-    let _ = std::fs::write(&ini, format!("[Client]\r\nMaxFps={}\r\nUnlockResolutions=1\r\n", max_fps));
-    log(&format!("client improvements on: max fps {}", if max_fps.is_empty() { "auto" } else { &max_fps }));
+    let _ = std::fs::write(&ini, format_client_ini(m));
+    let max_fps = m.max_fps.map(|n| n.to_string()).unwrap_or_else(|| "auto".into());
+    let fov = m.fov.map(|n| n.to_string()).unwrap_or_else(|| "stock".into());
+    log(&format!(
+        "client improvements on: max fps {}, fov {}, focal {}, ads {:.2}, scope {:.2}",
+        max_fps,
+        fov,
+        if m.focal_length { 1 } else { 0 },
+        m.ads_mult.unwrap_or(1.0),
+        m.scope_mult.unwrap_or(1.0)
+    ));
 }
 
 /// Deletes files the launcher put in the game folder; one that is already gone is fine.
@@ -1198,5 +1245,25 @@ mod tests {
         assert_eq!(d3d9_kind(b"MZ\x90\0Wine builtin DLL\0..."), "WineD3D (Wine's own d3d9, not DXVK)");
         assert_eq!(d3d9_kind(b"MZ\x90\0...dxvk-cache..."), "DXVK (Vulkan)");
         assert_eq!(d3d9_kind(b"MZ\x90\0"), "unknown d3d9.dll");
+    }
+
+    #[test]
+    fn formats_client_ini_with_phase2_options() {
+        let m = client_mods(true, "144", "100", true, "1,25", "0.75").unwrap();
+        assert_eq!(m.max_fps, Some(144));
+        assert_eq!(m.fov, Some(100));
+        assert!(m.focal_length);
+        assert_eq!(m.ads_mult, Some(1.25));
+        assert_eq!(m.scope_mult, Some(0.75));
+        assert_eq!(
+            format_client_ini(m),
+            "[Client]\r\nMaxFps=144\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=100\r\nFocalLengthScaling=1\r\nAdsMultiplier=1.25\r\nScopeMultiplier=0.75\r\n"
+        );
+        let def = client_mods(true, "", "", false, "", "").unwrap();
+        assert_eq!(
+            format_client_ini(def),
+            "[Client]\r\nMaxFps=\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=\r\nFocalLengthScaling=0\r\nAdsMultiplier=1.0\r\nScopeMultiplier=1.0\r\n"
+        );
+        assert_eq!(client_mods(false, "144", "100", true, "1.5", "0.5"), None);
     }
 }

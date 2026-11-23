@@ -3,7 +3,7 @@
 // collects what the player typed and shows the progress events.
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, clientmods: true, maxfps: '', dxvk: true, server: 'vista previa' } : null);
+const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', dxvk: true, server: 'vista previa' } : null);
 const listen = tauri ? tauri.event.listen : async () => {};
 
 // The screen's own resolution, in real pixels (the page sees scaled ones on high-DPI screens).
@@ -21,8 +21,7 @@ function fillResolutions(saved) {
   sel.value = saved || 'auto';
 }
 
-// "Mejoras del cliente": our version.dll and its frame cap. No "no cap" here (about 1500 FPS in the menus); a value
-// written by hand in settings.txt is kept and shown.
+// "Mejoras del cliente": our version.dll and its frame cap, FOV, and ADS sensitivity settings.
 function fillMaxFps(saved) {
   const sel = $('maxfps');
   sel.add(new Option('Automático (frecuencia del monitor)', ''));
@@ -30,7 +29,19 @@ function fillMaxFps(saved) {
   if (saved && ![...sel.options].some((o) => o.value === saved)) sel.add(new Option(saved === '0' ? 'Sin límite' : `${saved} FPS`, saved));
   sel.value = saved || '';
 }
-$('clientmods').addEventListener('change', () => { $('maxfps').disabled = !$('clientmods').checked; });
+function fillFov(saved) {
+  const sel = $('fov');
+  sel.add(new Option('Original (~79°)', ''));
+  for (const n of [70, 75, 80, 85, 90, 95, 100, 105, 110]) sel.add(new Option(`${n}°`, String(n)));
+  if (saved && ![...sel.options].some((o) => o.value === saved)) sel.add(new Option(`${saved}°`, saved));
+  sel.value = saved || '';
+}
+const CLIENTMOD_CONTROLS = ['maxfps', 'fov', 'focallength', 'adsmult', 'scopemult'];
+function syncClientMods(busy = false) {
+  const off = busy || !$('clientmods').checked;
+  for (const id of CLIENTMOD_CONTROLS) $(id).disabled = off;
+}
+$('clientmods').addEventListener('change', () => syncClientMods(false));
 
 // "Vulkan (DXVK)": on Windows a choice; on Linux the game always runs on Proton's DXVK, so it shows as on and fixed.
 const LINUX = /Linux/.test(navigator.userAgent);
@@ -49,7 +60,7 @@ function setStatus(text, fraction) {
 function setBusy(busy) {
   $('play').disabled = busy;
   for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'gamedir', 'browse', 'resolution', 'windowed', 'clientmods']) $(id).disabled = busy;
-  $('maxfps').disabled = busy || !$('clientmods').checked;
+  syncClientMods(busy);
   $('dxvk').disabled = busy || LINUX;
 }
 
@@ -110,7 +121,7 @@ $('form').addEventListener('submit', async (ev) => {
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus('Conectando...');
-  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value, dxvk: $('dxvk').checked } });
+  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: $('fov').value, focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), dxvk: $('dxvk').checked } });
 });
 
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
@@ -199,8 +210,12 @@ listen('done', (e) => {
   $('version').textContent = `launcher ${s.version}`;
   fillResolutions(s.resolution);
   fillMaxFps(s.maxfps);
+  fillFov(s.fov);
+  $('focallength').checked = !!s.focallength;
+  $('adsmult').value = s.adsmult || '';
+  $('scopemult').value = s.scopemult || '';
   $('clientmods').checked = s.clientmods;
-  $('clientmods').dispatchEvent(new Event('change'));
+  syncClientMods(false);
   showDxvk(s.dxvk);
   $('dxvk').disabled = LINUX;
   (s.name ? $('password') : $('name')).focus();

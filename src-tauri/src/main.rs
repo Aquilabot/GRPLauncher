@@ -28,14 +28,34 @@ struct State {
     resolution: String, // "auto" or "WxH"
     windowed: bool,
     clientmods: bool,
-    maxfps: String, // empty: the monitor's refresh rate
+    maxfps: String,     // empty: the monitor's refresh rate
+    fov: String,        // empty: stock (~79.3 deg horizontal at 16:9)
+    focallength: bool,  // false: stock ADS curve; true: focal-length scaling
+    adsmult: String,    // empty or "1.0": stock multiplier
+    scopemult: String,  // empty or "1.0": stock multiplier
     dxvk: bool,
     server: String,
 }
 
-/// "Mejoras del cliente" as settings.txt keeps it: "clientmods" (on unless "0") and "maxfps" (empty: automatic).
-fn saved_client_mods(s: &std::collections::HashMap<String, String>) -> (bool, String) {
-    (s.get("clientmods").map_or(true, |v| v != "0"), s.get("maxfps").cloned().unwrap_or_default())
+struct SavedClientMods {
+    on: bool,
+    maxfps: String,
+    fov: String,
+    focallength: bool,
+    adsmult: String,
+    scopemult: String,
+}
+
+/// "Mejoras del cliente" as settings.txt keeps it.
+fn saved_client_mods(s: &std::collections::HashMap<String, String>) -> SavedClientMods {
+    SavedClientMods {
+        on: s.get("clientmods").map_or(true, |v| v != "0"),
+        maxfps: s.get("maxfps").cloned().unwrap_or_default(),
+        fov: s.get("fov").cloned().unwrap_or_default(),
+        focallength: s.get("focallength").map(|v| v == "1").unwrap_or(false),
+        adsmult: s.get("adsmult").cloned().unwrap_or_default(),
+        scopemult: s.get("scopemult").cloned().unwrap_or_default(),
+    }
 }
 
 /// "Vulkan (DXVK)" as settings.txt keeps it: "dxvk", on unless "0" (the launcher writes "0" when the game failed with it).
@@ -46,15 +66,19 @@ fn saved_dxvk(s: &std::collections::HashMap<String, String>) -> bool {
 #[tauri::command]
 fn get_state() -> State {
     let s = core::settings();
-    let (clientmods, maxfps) = saved_client_mods(&s);
+    let cm = saved_client_mods(&s);
     State {
         version: core::VERSION,
         name: s.get("name").cloned().unwrap_or_default(),
         gamedir: s.get("gamedir").filter(|v| !v.is_empty()).cloned().unwrap_or_else(|| core::default_game_dir().to_string_lossy().into_owned()),
         resolution: s.get("resolution").cloned().unwrap_or_else(|| "auto".into()),
         windowed: s.get("windowed").map(|v| v == "1").unwrap_or(false),
-        clientmods,
-        maxfps,
+        clientmods: cm.on,
+        maxfps: cm.maxfps,
+        fov: cm.fov,
+        focallength: cm.focallength,
+        adsmult: cm.adsmult,
+        scopemult: cm.scopemult,
         dxvk: saved_dxvk(&s),
         server: core::config().server.clone(),
     }
@@ -74,6 +98,14 @@ struct PlayArgs {
     windowed: bool,
     clientmods: bool,
     maxfps: String,
+    #[serde(default)]
+    fov: String,
+    #[serde(default)]
+    focallength: bool,
+    #[serde(default)]
+    adsmult: String,
+    #[serde(default)]
+    scopemult: String,
     dxvk: bool,
 }
 
@@ -100,6 +132,10 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("windowed", if args.windowed { "1" } else { "0" }.to_string()),
             ("clientmods", if args.clientmods { "1" } else { "0" }.to_string()),
             ("maxfps", args.maxfps.clone()),
+            ("fov", args.fov.clone()),
+            ("focallength", if args.focallength { "1" } else { "0" }.to_string()),
+            ("adsmult", args.adsmult.clone()),
+            ("scopemult", args.scopemult.clone()),
             ("dxvk", if args.dxvk { "1" } else { "0" }.to_string()),
         ]);
         let progress_app = app.clone();
@@ -120,7 +156,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         }
         if error.is_none() {
             let playing_app = app.clone();
-            let client = core::client_mods(args.clientmods, &args.maxfps);
+            let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult);
             let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, client, dxvk: args.dxvk };
             error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
@@ -240,8 +276,8 @@ fn main() {
         let dir = arg(&args, "--gamedir").map(std::path::PathBuf::from).unwrap_or_else(core::default_game_dir);
         let last = std::sync::Mutex::new(String::new());
         let saved = core::settings();
-        let (on, max_fps) = saved_client_mods(&saved);
-        let client = core::client_mods(on, &max_fps);
+        let cm = saved_client_mods(&saved);
+        let client = core::client_mods(cm.on, &cm.maxfps, &cm.fov, cm.focallength, &cm.adsmult, &cm.scopemult);
         let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, client, dxvk: saved_dxvk(&saved) };
         let r = core::play(
             &name,

@@ -38,6 +38,7 @@ select:disabled, input:disabled { opacity: .55; }
 .check.tight { margin: 0; white-space: nowrap; }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
 .row { display: flex; gap: 10px; align-items: center; }
+.col { flex: 1; min-width: 0; }
 details {
   margin-top: 14px; border-top: 1px solid var(--line); padding-top: 8px;
   /* with Options and the invitation open the form is taller than the window: Options scroll, JUGAR stays in view */

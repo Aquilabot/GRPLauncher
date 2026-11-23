@@ -43,9 +43,26 @@
         <label class="check tight"><input id="windowed" type="checkbox"> En ventana</label>
       </div>
       <label for="maxfps">Mejoras del cliente y límite de FPS</label>
-      <div class="row" title="Resoluciones de más de 1920 × 1200 en Opciones > Vídeo del juego y más de 60 FPS. Desactivadas, el juego queda como el original.">
+      <div class="row" title="Resoluciones de más de 1920 × 1200 en Opciones > Vídeo del juego, más de 60 FPS, ratón sin límite de giro por fotograma y ajustes de FOV y sensibilidad. Desactivadas, el juego queda como el original.">
         <label class="check tight"><input id="clientmods" type="checkbox"> Activadas</label>
         <select id="maxfps"></select>
+      </div>
+      <label for="fov">Campo de visión (FOV)</label>
+      <div class="row" title="Campo de visión horizontal al caminar o correr (en 16:9). Las miras y telescopios conservan su zoom original.">
+        <select id="fov"></select>
+      </div>
+      <label class="check" title="Escala la sensibilidad al apuntar según la distancia focal real (tan(FOV/2)) en lugar de la curva original del juego.">
+        <input id="focallength" type="checkbox"> Escalar sensibilidad al apuntar por distancia focal
+      </label>
+      <div class="row">
+        <div class="col" title="Multiplicador de sensibilidad al apuntar con mira de punto rojo o hierro (0.1 a 3.0; vacío o 1.0 = normal).">
+          <label for="adsmult">Multiplicador ADS</label>
+          <input id="adsmult" type="number" min="0.1" max="3.0" step="0.05" placeholder="1.0">
+        </div>
+        <div class="col" title="Multiplicador de sensibilidad con miras telescópicas de francotirador (0.1 a 3.0; vacío o 1.0 = normal).">
+          <label for="scopemult">Multiplicador mira</label>
+          <input id="scopemult" type="number" min="0.1" max="3.0" step="0.05" placeholder="1.0">
+        </div>
       </div>
       <label for="dxvk">Vulkan (DXVK)</label>
       <div class="row" id="dxvkRow" title="El juego dibuja con Vulkan a través de DXVK, como en Linux. Si tu tarjeta gráfica no tiene Vulkan 1.3 o el juego no abre así, se usa DirectX 9.">

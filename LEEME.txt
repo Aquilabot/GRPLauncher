@@ -42,8 +42,10 @@ OPCIONES
 - Resolución: "Automática" usa la de tu pantalla, sea cual sea. También puedes elegir otra o jugar en
   ventana.
 - Mejoras del cliente (activadas por defecto): el launcher pone un archivo nuestro, version.dll, en la
-  carpeta del juego. Con él, Opciones > Vídeo del juego ofrece resoluciones de más de 1920 x 1200 y el
-  juego pasa de 60 FPS. El límite de FPS se elige al lado: "Automático" usa la frecuencia de tu monitor
+  carpeta del juego. Con él, Opciones > Vídeo ofrece resoluciones de más de 1920 x 1200, el juego pasa de
+  60 FPS, se elimina el límite de giro rápido del ratón por fotograma y puedes ajustar el campo de visión
+  (FOV, de 70° a 110°), el escalado de sensibilidad por distancia focal y los multiplicadores al apuntar
+  (ADS y mira telescópica). El límite de FPS se elige al lado: "Automático" usa la frecuencia de tu monitor
   (hasta 240). Si las desactivas, el launcher borra ese archivo y el juego queda como el original.
 - Vulkan (DXVK) (activado por defecto): el juego dibuja con Vulkan a través de DXVK, como en Linux. El
   launcher pone d3d9.dll de DXVK en la carpeta del juego (con su licencia, DXVK-LICENSE.txt) solo si tu
