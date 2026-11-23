@@ -57,6 +57,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="notes-head">
           <h2 data-i18n="notes.title">Novedades</h2>
           <span id="notesNew" hidden></span>
+          <nav class="pager" id="notesPager" aria-label="Paginación de novedades" data-i18n-aria="notes.pager" hidden>
+            <button type="button" id="notesPrev" aria-label="Página anterior" data-i18n-aria="notes.prev">‹</button>
+            <span id="notesPage"></span>
+            <button type="button" id="notesNext" aria-label="Página siguiente" data-i18n-aria="notes.next">›</button>
+          </nav>
         </div>
         <div id="notesList" tabindex="0"></div>
         <p class="notes-empty" id="notesEmpty" data-i18n="notes.empty" hidden>Aún no hay novedades.</p>

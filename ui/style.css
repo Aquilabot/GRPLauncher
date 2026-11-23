@@ -88,13 +88,39 @@ main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
 .sep { width: 4px; height: 4px; background: var(--signal); transform: rotate(45deg); }
 
 .notes { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px 0 16px; }
-.notes-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; }
+.notes-head { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; }
 h2 { font: 600 17px/1.1 var(--caps); letter-spacing: .12em; text-transform: uppercase; }
 #notesNew { color: var(--fresh); font: 600 13px/1 var(--caps); letter-spacing: .1em; text-transform: uppercase; }
+.pager { margin-left: auto; display: flex; align-items: center; border: 1px solid var(--line); }
+.pager button {
+  background: none; border: 0; width: 26px; height: 22px; padding: 0; color: var(--ink-2);
+  font: 600 15px/1 var(--caps); display: grid; place-items: center; transition: color .15s var(--out), background-color .15s var(--out);
+}
+.pager button:hover:not(:disabled) { color: var(--ink); background: var(--line); }
+.pager button:disabled { color: var(--ink-3); opacity: .45; }
+#notesPage {
+  padding: 0 9px; border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+  color: var(--ink-2); font: 600 13px/22px var(--caps); letter-spacing: .08em;
+}
 #notesList {
   flex: 1; min-height: 0; overflow-y: auto; user-select: text; padding-right: 10px; margin-right: -8px;
   scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;
 }
+#notesList::-webkit-scrollbar,
+.set-scroll::-webkit-scrollbar,
+#status::-webkit-scrollbar { width: 6px; }
+#notesList::-webkit-scrollbar-track,
+.set-scroll::-webkit-scrollbar-track,
+#status::-webkit-scrollbar-track { background: transparent; }
+#notesList::-webkit-scrollbar-thumb,
+.set-scroll::-webkit-scrollbar-thumb,
+#status::-webkit-scrollbar-thumb { background: var(--line-hi); }
+#notesList::-webkit-scrollbar-thumb:hover,
+.set-scroll::-webkit-scrollbar-thumb:hover,
+#status::-webkit-scrollbar-thumb:hover { background: var(--signal); }
+#notesList::-webkit-scrollbar-button,
+.set-scroll::-webkit-scrollbar-button,
+#status::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 #notesList:focus-visible { outline-offset: -1px; }
 .note { display: grid; grid-template-columns: 92px 1fr; gap: 0 14px; padding: 10px 0 11px; border-top: 1px solid var(--line); }
 .note-meta { color: var(--ink-3); font-size: 13px; line-height: 1.5; }

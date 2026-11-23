@@ -19,6 +19,7 @@ const TEXT = {
     'nav.label': 'Secciones', 'nav.home': 'Inicio', 'nav.settings': 'Ajustes', 'lang.label': 'Idioma',
     'server.name': 'Servidor comunitario', 'server.place': 'São Paulo · 60 Hz',
     'notes.title': 'Novedades', 'notes.empty': 'Aún no hay novedades.', 'notes.new1': '1 nueva', 'notes.newN': '{n} nuevas', 'notes.fresh': 'Nuevo',
+    'notes.pager': 'Paginación de novedades', 'notes.prev': 'Página anterior', 'notes.next': 'Página siguiente',
     'tag.servidor': 'Servidor', 'tag.launcher': 'Launcher', 'tag.juego': 'Juego',
     'set.game': 'Juego', 'set.gamedir': 'Carpeta del juego', 'set.browse': 'Examinar', 'set.gamedir.hint': 'Si el juego no está en esta carpeta, se descargará aquí (~4 GB).',
     'set.resolution': 'Resolución', 'set.windowed': 'En ventana', 'set.res.auto': 'Automática ({w} × {h})',
@@ -48,6 +49,7 @@ const TEXT = {
     'nav.label': 'Sections', 'nav.home': 'Home', 'nav.settings': 'Settings', 'lang.label': 'Language',
     'server.name': 'Community server', 'server.place': 'São Paulo · 60 Hz',
     'notes.title': 'Release notes', 'notes.empty': 'No updates published yet.', 'notes.new1': '1 new', 'notes.newN': '{n} new', 'notes.fresh': 'New',
+    'notes.pager': 'Release notes pages', 'notes.prev': 'Previous page', 'notes.next': 'Next page',
     'tag.servidor': 'Server', 'tag.launcher': 'Launcher', 'tag.juego': 'Game',
     'set.game': 'Game', 'set.gamedir': 'Game folder', 'set.browse': 'Browse', 'set.gamedir.hint': 'Downloads the game here if missing (~4 GB).',
     'set.resolution': 'Resolution', 'set.windowed': 'Windowed', 'set.res.auto': 'Auto ({w} × {h})',
@@ -417,7 +419,8 @@ for (const b of document.querySelectorAll('.ext')) b.addEventListener('click', (
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
 // last one the player saw get a mark; touching the list or pressing Play counts as seen (the marks stay until the
 // window closes, so the player can still tell which ones were new).
-let notesTop = 0, notesSeen = 0, notesShown = [];
+const NOTES_PER_PAGE = 5;
+let notesTop = 0, notesSeen = 0, notesShown = [], notesPage = 0;
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -433,9 +436,16 @@ function showDate(d) {
 
 function drawNotes() {
   const notes = notesShown;
+  const pages = Math.max(1, Math.ceil(notes.length / NOTES_PER_PAGE));
+  notesPage = Math.min(Math.max(0, notesPage), pages - 1);
+  const slice = notes.slice(notesPage * NOTES_PER_PAGE, (notesPage + 1) * NOTES_PER_PAGE);
   $('notesEmpty').hidden = notes.length > 0;
   $('notesList').hidden = notes.length === 0;
-  $('notesList').replaceChildren(...notes.map((n) => {
+  $('notesPager').hidden = pages <= 1;
+  $('notesPage').textContent = `${notesPage + 1} / ${pages}`;
+  $('notesPrev').disabled = notesPage <= 0;
+  $('notesNext').disabled = notesPage >= pages - 1;
+  $('notesList').replaceChildren(...slice.map((n) => {
     const isNew = n.id > notesSeen;
     const a = el('article', isNew ? 'note new' : 'note');
     const meta = el('div', 'note-meta');
@@ -459,11 +469,22 @@ function drawNotes() {
 let notesMarked = 0;
 fresh.push(drawNotes);
 
+function goNotesPage(delta) {
+  notesPage += delta;
+  drawNotes();
+  $('notesList').scrollTop = 0;
+  markNotesSeen();
+}
+$('notesPrev').addEventListener('click', () => goNotesPage(-1));
+$('notesNext').addEventListener('click', () => goNotesPage(1));
+
 async function loadNotes() {
   const r = await invoke('get_notes').catch(() => null);
+  const prevTop = notesTop;
   notesShown = (r && r.notes) || [];
   if (notesShown.length) {
     notesTop = notesShown[0].id;
+    if (notesTop > prevTop) notesPage = 0;
     notesSeen = Math.max(notesSeen, r.seen || 0);
     // A player who has never seen the list: everything in it is history, nothing is news.
     if (!notesSeen) { notesSeen = notesMarked = notesTop; invoke('mark_notes_seen', { id: notesTop }); }
