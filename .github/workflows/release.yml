@@ -1,5 +1,6 @@
-# Builds the Windows launcher (GRPLauncher.exe) from this repository. It runs only for a version tag pushed by a maintainer, or when
-# a maintainer starts it by hand: never for pull requests, so code from a fork is not built or given secrets here.
+# Builds the Windows launcher (GRPLauncher.exe) from this repository and publishes a GitHub release for version tags.
+# It runs only for a version tag pushed by a maintainer, or when a maintainer starts it by hand: never for pull
+# requests, so code from a fork is not built or given secrets here.
 name: release
 on:
   push:
@@ -39,3 +40,49 @@ jobs:
       #     github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
       #     wait-for-completion: true
       #     output-artifact-directory: signed
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: GRPLauncher-unsigned
+          path: dist
+      - name: Package zip
+        run: |
+          ( cd dist && zip -q GRPLauncher.zip GRPLauncher.exe launcher.ini LEEME.txt LICENSE )
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          summary="$(git tag -l --format='%(contents)' "$TAG" | sed '/./,$!d')"
+          if [ -z "$summary" ]; then
+            summary="$(git log -1 --pretty='%B' "$TAG" | sed '/./,$!d')"
+          fi
+          cat > release-notes.md <<EOF
+          ${summary}
+
+          Installed launchers update themselves on their next start.
+
+          Windows build made by the release workflow of this repository (run ${RUN_ID}) from the tag ${TAG}, not signed yet: SmartScreen and antivirus products warn on first run (LEEME.txt explains what to do).
+
+          Code signing policy: see the [README](https://github.com/${REPO}#code-signing-policy). Planned: free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). Privacy policy: [PRIVACY.md](https://github.com/${REPO}/blob/master/PRIVACY.md).
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/GRPLauncher.exe dist/GRPLauncher.zip --clobber
+            gh release edit "$TAG" --title "GRPLauncher $TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" dist/GRPLauncher.exe dist/GRPLauncher.zip \
+              --title "GRPLauncher $TAG" \
+              --notes-file release-notes.md
+          fi
