@@ -3,7 +3,7 @@
 // events and draws the two diagrams (the terrain of the home view, the view cone of the settings).
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '' };
+const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', sidebutton1: '', sidebutton2: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '' };
 // Outside the launcher (the page opened in a browser, to look at it): the state above and three notes of the real log.
 const PREVIEW_NOTES = { seen: 25, notes: [
   { id: 26, date: '2026-11-23', tag: 'servidor', title: 'Bots más naturales', items: ['Los bots se mueven más como un jugador: corren y esprintan a velocidad de jugador, trepan y caen en vez de cambiar de altura de golpe.', 'Ya no se meten dentro de los muros ni se quedan quietos cuando les disparan.'] },
@@ -33,6 +33,7 @@ const TEXT = {
     'cone.title': 'Campo de visión de {deg}° comparado con el original de 79°',
     'set.maxfps': 'Límite de FPS', 'fps.auto': 'Automático (Hz del monitor)', 'fps.none': 'Sin límite',
     'set.ads': 'Sensibilidad al apuntar', 'set.focal': 'Escalar por distancia focal', 'set.focal.hint': 'Mantiene una sensación de puntería consistente al hacer zoom, en lugar de la curva original del juego.', 'set.adsmult': 'Multiplicador con mira (ADS)', 'set.scopemult': 'Multiplicador con telescópica',
+    'set.side': 'Botones laterales del ratón', 'set.side.hint': 'El juego no reconoce los botones laterales. Elige la tecla que pulsa cada uno y asigna esa tecla a la acción en las opciones del juego.', 'set.side1': 'Botón lateral 1 (atrás)', 'set.side2': 'Botón lateral 2 (adelante)', 'side.none': 'Ninguna', 'side.pgup': 'Re Pág', 'side.pgdn': 'Av Pág', 'side.numpad': 'Teclado numérico {n}',
     'acc.label': 'Cuenta', 'acc.login': 'Entrar', 'acc.create': 'Cuenta nueva', 'acc.name': 'Nickname', 'acc.password': 'Contraseña',
     'acc.create.hint': 'Gratis y sin correo. Contraseña de al menos 6 caracteres.', 'acc.forgot': '¿Olvidaste tu contraseña?', 'acc.invite': 'Código de invitación',
     'play': 'Jugar', 'play.create': 'Crear cuenta y jugar',
@@ -63,6 +64,7 @@ const TEXT = {
     'cone.title': '{deg}° field of view compared to default 79°',
     'set.maxfps': 'FPS limit', 'fps.auto': 'Auto (monitor refresh rate)', 'fps.none': 'Uncapped',
     'set.ads': 'Aim sensitivity', 'set.focal': 'Scale by focal length', 'set.focal.hint': 'Keeps aiming feel consistent across zoom levels instead of using the game’s default curve.', 'set.adsmult': 'ADS multiplier', 'set.scopemult': 'Scope multiplier',
+    'set.side': 'Mouse side buttons', 'set.side.hint': 'The game does not see the side buttons. Pick the key each one presses, then bind that key to the action in the game’s options.', 'set.side1': 'Side button 1 (back)', 'set.side2': 'Side button 2 (forward)', 'side.none': 'None', 'side.pgup': 'Page Up', 'side.pgdn': 'Page Down', 'side.numpad': 'Numpad {n}',
     'acc.label': 'Account', 'acc.login': 'Sign in', 'acc.create': 'New account', 'acc.name': 'Nickname', 'acc.password': 'Password',
     'acc.create.hint': 'Free, no email required. Password must be at least 6 characters.', 'acc.forgot': 'Forgot your password?', 'acc.invite': 'Invitation code',
     'play': 'Play', 'play.create': 'Create account and play',
@@ -259,6 +261,30 @@ function fillMaxFps(saved) {
   sel.value = saved || '';
 }
 
+// Mouse side buttons: the key each one presses, by the name the DLL takes (the game's own key names).
+const SIDE_KEYS = [
+  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+  ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
+  ...Array.from({ length: 10 }, (_, i) => `Numpad${i}`),
+  'Insert', 'Delete', 'Home', 'End', 'Prior', 'Next',
+];
+function sideKeyLabel(k) {
+  if (k === 'Prior') return t('side.pgup');
+  if (k === 'Next') return t('side.pgdn');
+  if (k.startsWith('Numpad')) return t('side.numpad', { n: k.slice(6) });
+  return k;
+}
+function fillSideKey(id, saved) {
+  const sel = $(id);
+  const none = new Option('', '');
+  sel.add(none);
+  const opts = SIDE_KEYS.map((k) => new Option(k, k));
+  if (saved && !SIDE_KEYS.includes(saved)) opts.push(new Option(saved, saved));
+  for (const o of opts) sel.add(o);
+  fresh.push(() => { none.textContent = t('side.none'); for (const o of opts) o.textContent = sideKeyLabel(o.value); });
+  sel.value = saved || '';
+}
+
 // Field of view: step 0 of the slider is the game's own (about 79 degrees), then 70 to 110 in fives. A value saved by
 // hand that is none of those stays as it is until the player moves the slider.
 const STOCK_FOV = 79.3;
@@ -305,7 +331,7 @@ function drawCone() {
 $('fov').addEventListener('input', () => { fovOdd = ''; drawCone(); });
 fresh.push(drawCone);
 
-const CLIENTMOD_CONTROLS = ['maxfps', 'fov', 'focallength', 'adsmult', 'scopemult'];
+const CLIENTMOD_CONTROLS = ['maxfps', 'fov', 'focallength', 'adsmult', 'scopemult', 'sidebutton1', 'sidebutton2'];
 function syncClientMods(busy = false) {
   const off = busy || !$('clientmods').checked;
   for (const id of CLIENTMOD_CONTROLS) $(id).disabled = off;
@@ -406,7 +432,7 @@ $('form').addEventListener('submit', async (ev) => {
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus(t('msg.connecting'));
-  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: fovValue(), focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), dxvk: $('dxvk').checked, classbuttons: $('classbuttons').checked } });
+  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: fovValue(), focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), sidebutton1: $('sidebutton1').value, sidebutton2: $('sidebutton2').value, dxvk: $('dxvk').checked, classbuttons: $('classbuttons').checked } });
 });
 
 // Links of the bottom rail: the Rust side knows the addresses and opens them in the player's browser.
@@ -545,6 +571,8 @@ listen('done', (e) => {
   $('focallength').checked = !!s.focallength;
   $('adsmult').value = s.adsmult || '';
   $('scopemult').value = s.scopemult || '';
+  fillSideKey('sidebutton1', s.sidebutton1);
+  fillSideKey('sidebutton2', s.sidebutton2);
   $('clientmods').checked = s.clientmods;
   setFov(s.fov);
   syncClientMods(false);

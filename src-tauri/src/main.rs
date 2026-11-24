@@ -35,6 +35,8 @@ struct State {
     focallength: bool,  // false: stock ADS curve; true: focal-length scaling
     adsmult: String,    // empty or "1.0": stock multiplier
     scopemult: String,  // empty or "1.0": stock multiplier
+    sidebutton1: String, // the key mouse side button 1 presses; empty: none
+    sidebutton2: String,
     dxvk: bool,
     classbuttons: bool,
     server: String,
@@ -48,6 +50,7 @@ struct SavedClientMods {
     focallength: bool,
     adsmult: String,
     scopemult: String,
+    sidebuttons: [String; 2],
 }
 
 /// "Mejoras del cliente" as settings.txt keeps it.
@@ -59,6 +62,7 @@ fn saved_client_mods(s: &std::collections::HashMap<String, String>) -> SavedClie
         focallength: s.get("focallength").map(|v| v == "1").unwrap_or(false),
         adsmult: s.get("adsmult").cloned().unwrap_or_default(),
         scopemult: s.get("scopemult").cloned().unwrap_or_default(),
+        sidebuttons: ["sidebutton1", "sidebutton2"].map(|k| s.get(k).map(|v| core::parse_side_key(v)).unwrap_or_default()),
     }
 }
 
@@ -76,6 +80,7 @@ fn saved_class_buttons(s: &std::collections::HashMap<String, String>) -> bool {
 fn get_state() -> State {
     let s = core::settings();
     let cm = saved_client_mods(&s);
+    let [sidebutton1, sidebutton2] = cm.sidebuttons;
     State {
         version: core::VERSION,
         name: s.get("name").cloned().unwrap_or_default(),
@@ -89,6 +94,8 @@ fn get_state() -> State {
         focallength: cm.focallength,
         adsmult: cm.adsmult,
         scopemult: cm.scopemult,
+        sidebutton1,
+        sidebutton2,
         dxvk: saved_dxvk(&s),
         classbuttons: saved_class_buttons(&s),
         server: core::config().server.clone(),
@@ -146,6 +153,10 @@ struct PlayArgs {
     adsmult: String,
     #[serde(default)]
     scopemult: String,
+    #[serde(default)]
+    sidebutton1: String,
+    #[serde(default)]
+    sidebutton2: String,
     dxvk: bool,
     #[serde(default = "yes")]
     classbuttons: bool,
@@ -183,6 +194,8 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("focallength", if args.focallength { "1" } else { "0" }.to_string()),
             ("adsmult", args.adsmult.clone()),
             ("scopemult", args.scopemult.clone()),
+            ("sidebutton1", core::parse_side_key(&args.sidebutton1)),
+            ("sidebutton2", core::parse_side_key(&args.sidebutton2)),
             ("dxvk", if args.dxvk { "1" } else { "0" }.to_string()),
             ("classbuttons", if args.classbuttons { "1" } else { "0" }.to_string()),
         ]);
@@ -204,7 +217,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         }
         if error.is_none() {
             let playing_app = app.clone();
-            let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult);
+            let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult, [&args.sidebutton1, &args.sidebutton2]);
             let mouse_sens = core::parse_mouse_sens(&args.mousesens);
             let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, mouse_sens, client, dxvk: args.dxvk, class_buttons: args.classbuttons, run: true };
             error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
@@ -326,7 +339,7 @@ fn main() {
         let last = std::sync::Mutex::new(String::new());
         let saved = core::settings();
         let cm = saved_client_mods(&saved);
-        let client = core::client_mods(cm.on, &cm.maxfps, &cm.fov, cm.focallength, &cm.adsmult, &cm.scopemult);
+        let client = core::client_mods(cm.on, &cm.maxfps, &cm.fov, cm.focallength, &cm.adsmult, &cm.scopemult, [&cm.sidebuttons[0], &cm.sidebuttons[1]]);
         let mouse_sens = saved.get("mousesens").and_then(|v| core::parse_mouse_sens(v));
         let opts = core::PlayOptions {
             sync: !args.iter().any(|a| a == "--nosync"),

@@ -25,7 +25,7 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
 }
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 16;
+pub const VERSION: u32 = 17;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -676,15 +676,16 @@ fn set_class_buttons(game_dir: &Path, patches: &[SlotPatch], on: bool) {
 
 /// "Mejoras del cliente" switched on: our version.dll in the game folder, set by grp-client.ini next to it (more
 /// display modes in Options > Video, a frame cap other than 60, unlocked mouse per-frame cap, custom hipfire FOV,
-/// focal-length ADS scaling, and ADS/scope sensitivity multipliers). Switched off, neither file is there and the game
+/// focal-length ADS scaling, ADS/scope sensitivity multipliers, and a key for each mouse side button). Switched off, neither file is there and the game
 /// is the original.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClientMods {
     pub max_fps: Option<u32>,    // None: the monitor's refresh rate (the DLL clamps it to 60-240)
     pub fov: Option<u32>,        // None: stock (~79.3 deg horizontal at 16:9); Some(70..=110)
     pub focal_length: bool,      // false: stock ADS curve; true: tan(cur_vfov/2) / tan(hip_vfov/2)
     pub ads_mult: Option<f32>,   // None: 1.0x; Some(0.1..=3.0)
     pub scope_mult: Option<f32>, // None: 1.0x; Some(0.1..=3.0)
+    pub side_keys: [String; 2],  // the key each mouse side button presses, as the DLL names it; empty: none
 }
 
 const CLIENT_DLL: &str = "version.dll";
@@ -706,26 +707,53 @@ fn parse_mult(s: &str) -> Option<f32> {
     Some(v.clamp(0.1, 3.0))
 }
 
-/// The player's choice: on or off, plus frame cap, hipfire FOV, focal-length ADS scaling, and ADS/scope multipliers.
-pub fn client_mods(on: bool, max_fps: &str, fov: &str, focal_length: bool, ads_mult: &str, scope_mult: &str) -> Option<ClientMods> {
+/// A key name the DLL's SideButton1= / SideButton2= take (the game's KeyMappingsPC.ini names without "Key_": one letter
+/// or digit, F1-F12, Numpad0-9, and the named keys below), or empty for anything else: the DLL reads an unknown name
+/// as no key, and the name goes into an ini file, so only these get there.
+pub fn parse_side_key(s: &str) -> String {
+    const NAMED: [&str; 18] = [
+        "Insert", "Delete", "Home", "End", "Prior", "Next", "Capital", "Grave", "Minus", "Equals", "LBracket", "RBracket",
+        "Backslash", "Semicolon", "Apostrophe", "Comma", "Period", "Slash",
+    ];
+    let s = s.trim();
+    let s = if s.len() > 4 && s[..4].eq_ignore_ascii_case("key_") { &s[4..] } else { s };
+    let up = s.to_ascii_uppercase();
+    let b = up.as_bytes();
+    let known = match b {
+        [c] => c.is_ascii_uppercase() || c.is_ascii_digit(),
+        [b'F', d] => (b'1'..=b'9').contains(d),
+        [b'F', b'1', d] => (b'0'..=b'2').contains(d),
+        [b'N', b'U', b'M', b'P', b'A', b'D', d] => d.is_ascii_digit(),
+        _ => false,
+    };
+    if known {
+        return if b.len() == 7 { format!("Numpad{}", &up[6..]) } else { up };
+    }
+    NAMED.iter().find(|n| n.eq_ignore_ascii_case(s)).map(|n| n.to_string()).unwrap_or_default()
+}
+
+/// The player's choice: on or off, plus frame cap, hipfire FOV, focal-length ADS scaling, ADS/scope multipliers, and
+/// the key of each mouse side button.
+pub fn client_mods(on: bool, max_fps: &str, fov: &str, focal_length: bool, ads_mult: &str, scope_mult: &str, side_keys: [&str; 2]) -> Option<ClientMods> {
     on.then(|| ClientMods {
         max_fps: max_fps.trim().parse().ok(),
         fov: parse_fov(fov),
         focal_length,
         ads_mult: parse_mult(ads_mult),
         scope_mult: parse_mult(scope_mult),
+        side_keys: side_keys.map(parse_side_key),
     })
 }
 
-fn format_client_ini(m: ClientMods) -> String {
+fn format_client_ini(m: &ClientMods) -> String {
     let max_fps = m.max_fps.map(|n| n.to_string()).unwrap_or_default();
     let fov = m.fov.map(|n| n.to_string()).unwrap_or_default();
     let focal = if m.focal_length { 1 } else { 0 };
     let ads = m.ads_mult.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "1.0".into());
     let scope = m.scope_mult.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "1.0".into());
     format!(
-        "[Client]\r\nMaxFps={}\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov={}\r\nFocalLengthScaling={}\r\nAdsMultiplier={}\r\nScopeMultiplier={}\r\n",
-        max_fps, fov, focal, ads, scope
+        "[Client]\r\nMaxFps={}\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov={}\r\nFocalLengthScaling={}\r\nAdsMultiplier={}\r\nScopeMultiplier={}\r\nSideButton1={}\r\nSideButton2={}\r\n",
+        max_fps, fov, focal, ads, scope, m.side_keys[0], m.side_keys[1]
     )
 }
 
@@ -764,16 +792,18 @@ fn set_client_mods(vault_key: Option<&str>, game_dir: &Path, mods: Option<Client
             log(&format!("client dll not updated: {}", e));
         }
     }
-    let _ = std::fs::write(&ini, format_client_ini(m));
+    let _ = std::fs::write(&ini, format_client_ini(&m));
     let max_fps = m.max_fps.map(|n| n.to_string()).unwrap_or_else(|| "auto".into());
     let fov = m.fov.map(|n| n.to_string()).unwrap_or_else(|| "stock".into());
     log(&format!(
-        "client improvements on: max fps {}, fov {}, focal {}, ads {:.2}, scope {:.2}",
+        "client improvements on: max fps {}, fov {}, focal {}, ads {:.2}, scope {:.2}, side buttons '{}' '{}'",
         max_fps,
         fov,
         if m.focal_length { 1 } else { 0 },
         m.ads_mult.unwrap_or(1.0),
-        m.scope_mult.unwrap_or(1.0)
+        m.scope_mult.unwrap_or(1.0),
+        m.side_keys[0],
+        m.side_keys[1]
     ));
 }
 
@@ -1157,7 +1187,7 @@ fn set_resolution(game_dir: &Path, o: &PlayOptions) {
     };
     // On Linux the game runs under Wine on XWayland, where exclusive fullscreen leaves the mouse off from what is drawn:
     // a window the size of the screen looks the same and the clicks land where they should.
-    let o = &PlayOptions { windowed: o.windowed || cfg!(target_os = "linux"), ..*o };
+    let o = &PlayOptions { windowed: o.windowed || cfg!(target_os = "linux"), client: o.client.clone(), ..*o };
     let mut seen = [false; 3];
     let mut lines: Vec<String> = text
         .lines()
@@ -1210,7 +1240,7 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     set_resolution(game_dir, o);
     set_mouse_sensitivity(game_dir, o.mouse_sens);
     let vault_key = if o.sync { a.get(3).copied() } else { None };
-    set_client_mods(vault_key, game_dir, o.client, progress);
+    set_client_mods(vault_key, game_dir, o.client.clone(), progress);
     #[cfg(windows)]
     set_dxvk(vault_key, game_dir, o.dxvk, progress);
     set_class_buttons(game_dir, &patches, o.class_buttons);
@@ -1543,22 +1573,25 @@ mod tests {
 
     #[test]
     fn formats_client_ini_with_phase2_options() {
-        let m = client_mods(true, "144", "100", true, "1,25", "0.75").unwrap();
+        let m = client_mods(true, "144", "100", true, "1,25", "0.75", ["f", "Key_numpad1"]).unwrap();
         assert_eq!(m.max_fps, Some(144));
         assert_eq!(m.fov, Some(100));
         assert!(m.focal_length);
         assert_eq!(m.ads_mult, Some(1.25));
         assert_eq!(m.scope_mult, Some(0.75));
         assert_eq!(
-            format_client_ini(m),
-            "[Client]\r\nMaxFps=144\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=100\r\nFocalLengthScaling=1\r\nAdsMultiplier=1.25\r\nScopeMultiplier=0.75\r\n"
+            format_client_ini(&m),
+            "[Client]\r\nMaxFps=144\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=100\r\nFocalLengthScaling=1\r\nAdsMultiplier=1.25\r\nScopeMultiplier=0.75\r\nSideButton1=F\r\nSideButton2=Numpad1\r\n"
         );
-        let def = client_mods(true, "", "", false, "", "").unwrap();
+        let def = client_mods(true, "", "", false, "", "", ["", "F13\r\nMaxFps=1"]).unwrap();
         assert_eq!(
-            format_client_ini(def),
-            "[Client]\r\nMaxFps=\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=\r\nFocalLengthScaling=0\r\nAdsMultiplier=1.0\r\nScopeMultiplier=1.0\r\n"
+            format_client_ini(&def),
+            "[Client]\r\nMaxFps=\r\nUnlockResolutions=1\r\nUnlockMouseCap=1\r\nFov=\r\nFocalLengthScaling=0\r\nAdsMultiplier=1.0\r\nScopeMultiplier=1.0\r\nSideButton1=\r\nSideButton2=\r\n"
         );
-        assert_eq!(client_mods(false, "144", "100", true, "1.5", "0.5"), None);
+        assert_eq!(client_mods(false, "144", "100", true, "1.5", "0.5", ["F", "C"]), None);
+        for (given, kept) in [("q", "Q"), ("5", "5"), ("F9", "F9"), ("f12", "F12"), ("F0", ""), ("F13", ""), ("prior", "Prior"), ("Key_Home", "Home"), ("NUMPAD0", "Numpad0"), ("Escape", ""), ("QQ", "")] {
+            assert_eq!(parse_side_key(given), kept, "{}", given);
+        }
     }
 
     #[test]
