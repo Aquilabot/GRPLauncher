@@ -3,7 +3,7 @@
 // events and draws the two diagrams (the terrain of the home view, the view cone of the settings).
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', dxvk: true, server: '56.127.0.17', lang: '' };
+const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '' };
 // Outside the launcher (the page opened in a browser, to look at it): the state above and three notes of the real log.
 const PREVIEW_NOTES = { seen: 25, notes: [
   { id: 26, date: '2026-11-23', tag: 'servidor', title: 'Bots más naturales', items: ['Los bots se mueven más como un jugador: corren y esprintan a velocidad de jugador, trepan y caen en vez de cambiar de altura de golpe.', 'Ya no se meten dentro de los muros ni se quedan quietos cuando les disparan.'] },
@@ -23,7 +23,7 @@ const TEXT = {
     'tag.servidor': 'Servidor', 'tag.launcher': 'Launcher', 'tag.juego': 'Juego',
     'set.game': 'Juego', 'set.gamedir': 'Carpeta del juego', 'set.browse': 'Examinar', 'set.gamedir.hint': 'Si el juego no está en esta carpeta, se descargará aquí (~4 GB).',
     'set.resolution': 'Resolución', 'set.windowed': 'En ventana', 'set.res.auto': 'Automática ({w} × {h})',
-    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Activado', 'set.dxvk.hint': 'Si tu gráfica no soporta Vulkan 1.3 o el juego falla al abrir, vuelve a DirectX 9 automáticamente.', 'set.dxvk.linux': 'En Linux el juego ya usa Vulkan con el DXVK de Proton.',
+    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Activado', 'set.dxvk.hint': 'Si tu gráfica no soporta Vulkan 1.3 o el juego falla al abrir, vuelve a DirectX 9 automáticamente.', 'set.dxvk.linux': 'En Linux el juego ya usa Vulkan con el DXVK de Proton.', 'set.classbuttons': 'Botones de clase', 'set.classbuttons.hint': 'ASSAULT, RECON y SUPPORT en la pantalla de despliegue, para cambiar de clase en plena partida.',
     'set.mouse': 'Ratón', 'set.sens': 'Sensibilidad exacta', 'set.sens.placeholder': 'Sin cambios (usa la del juego)', 'set.calc': 'Calcular', 'set.calc.close': 'Cerrar',
     'set.sens.hint': 'Valor interno exacto, sin los saltos de 0,05 del menú. Déjalo vacío para usar el ajuste del juego.',
     'calc.from': 'Convertir desde', 'calc.cm360': 'cm por giro (360°)', 'calc.dpi': 'DPI del ratón', 'calc.apply': 'Aplicar', 'calc.in': 'Sensibilidad en {game}',
@@ -53,7 +53,7 @@ const TEXT = {
     'tag.servidor': 'Server', 'tag.launcher': 'Launcher', 'tag.juego': 'Game',
     'set.game': 'Game', 'set.gamedir': 'Game folder', 'set.browse': 'Browse', 'set.gamedir.hint': 'Downloads the game here if missing (~4 GB).',
     'set.resolution': 'Resolution', 'set.windowed': 'Windowed', 'set.res.auto': 'Auto ({w} × {h})',
-    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Enabled', 'set.dxvk.hint': 'Automatically falls back to DirectX 9 if your GPU lacks Vulkan 1.3 or fails to launch.', 'set.dxvk.linux': 'On Linux, the game already runs on Vulkan through Proton’s DXVK.',
+    'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Enabled', 'set.dxvk.hint': 'Automatically falls back to DirectX 9 if your GPU lacks Vulkan 1.3 or fails to launch.', 'set.dxvk.linux': 'On Linux, the game already runs on Vulkan through Proton’s DXVK.', 'set.classbuttons': 'Class buttons', 'set.classbuttons.hint': 'ASSAULT, RECON and SUPPORT on the deployment screen, to change class mid-match.',
     'set.mouse': 'Mouse', 'set.sens': 'Exact sensitivity', 'set.sens.placeholder': 'Default (in-game setting)', 'set.calc': 'Convert', 'set.calc.close': 'Close',
     'set.sens.hint': 'Exact internal value, bypassing the 0.05 in-game slider steps. Leave blank to keep your in-game setting.',
     'calc.from': 'Convert from', 'calc.cm360': 'cm / 360°', 'calc.dpi': 'Mouse DPI', 'calc.apply': 'Apply', 'calc.in': 'Sensitivity in {game}',
@@ -335,7 +335,7 @@ function setStatus(text, fraction, kind) {
 function setBusy(busy) {
   if (busy) $('app').dataset.busy = ''; else delete $('app').dataset.busy;
   $('play').disabled = busy;
-  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'modeLogin', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods']) $(id).disabled = busy;
+  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'modeLogin', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods', 'classbuttons']) $(id).disabled = busy;
   $('sensApply').disabled = busy || sensComputed === null;
   syncClientMods(busy);
   $('dxvk').disabled = busy || LINUX;
@@ -406,7 +406,7 @@ $('form').addEventListener('submit', async (ev) => {
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus(t('msg.connecting'));
-  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: fovValue(), focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), dxvk: $('dxvk').checked } });
+  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: fovValue(), focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), dxvk: $('dxvk').checked, classbuttons: $('classbuttons').checked } });
 });
 
 // Links of the bottom rail: the Rust side knows the addresses and opens them in the player's browser.
@@ -550,6 +550,7 @@ listen('done', (e) => {
   syncClientMods(false);
   showDxvk(s.dxvk);
   $('dxvk').disabled = LINUX;
+  $('classbuttons').checked = s.classbuttons !== false;
   // The language the player chose; the first time, English for a system in English and Spanish for the rest.
   const initialLang = s.lang || (/^en\b/i.test(navigator.language || '') ? 'en' : 'es');
   applyLang(initialLang);

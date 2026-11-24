@@ -2,7 +2,7 @@
 // folder check and download, the resolution, and starting the game.
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -386,7 +386,7 @@ fn mtime(file: &Path) -> u128 {
 }
 
 /// Makes the game folder equal to the vault's file list (manifest.txt: "vault <n>", then "<f|d> <sha256> <size> <path>").
-fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> Result<(), String> {
+fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: &dyn Fn(&str, f64)) -> Result<(), String> {
     let base = format!("{}/files/{}/", base_url(), vault_key);
     let text = get_text(&format!("{}manifest.txt", base), 30).map_err(|e| format!("{}: {}", tr("No se pudo leer la lista de archivos del servidor", "Could not read the server's file list"), e))?;
     let mut entries = Vec::new();
@@ -439,7 +439,7 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
             let key = format!("{}|{}|{}", e.size, mtime(&file), e.sha);
             if cache.get(&e.path) == Some(&key) {
                 same = true;
-            } else if sha256_file(&file).map(|h| h == e.sha).unwrap_or(false) {
+            } else if sha256_file(&file).map(|h| h == e.sha).unwrap_or(false) || patched_equals(&file, &e.path, &e.sha, patches) {
                 cache.insert(e.path.clone(), key);
                 same = true;
             }
@@ -477,6 +477,199 @@ fn sync_game(vault_key: &str, game_dir: &Path, progress: &dyn Fn(&str, f64)) -> 
     save_cache(&cache);
     log(&format!("game folder ready: {} downloaded", fetched));
     Ok(())
+}
+
+// ---- class buttons: an edited screen inside Yeti.big ----
+//
+// "Botones de clase": the deployment screen with ASSAULT, RECON and SUPPORT buttons is an edited copy of one file of
+// Yeti.big (InGameRespawn), written in place over the original, with the same length (the game walks the archive's
+// files by their sizes). The vault publishes it next to the client DLL, in client/ui/:
+//   ui.txt: one line per patch, "<path> <offset> <length> <size of the file> <sha256 of the original bytes>
+//           <sha256 of the new bytes>"
+//   <sha256>.bin: the bytes with that hash, the new ones and the original ones (to undo it and to check the file)
+// A file whose bytes at that place are neither is left alone. The vault's check of the game files counts a patched
+// file as its original (patched_equals), so it is never downloaded again for it.
+
+pub struct SlotPatch {
+    path: String,
+    offset: u64,
+    len: usize,
+    file_size: u64,
+    sha_orig: String,
+    sha_new: String,
+    orig: Vec<u8>,
+    new: Vec<u8>,
+}
+
+fn sha256_bytes(b: &[u8]) -> String {
+    hex::encode(Sha256::digest(b))
+}
+
+fn get_bytes(url: &str, max: u64) -> Result<Vec<u8>, String> {
+    let resp = ureq::get(url).timeout(Duration::from_secs(30)).call().map_err(|e| e.to_string())?;
+    let mut b = Vec::new();
+    resp.into_reader().take(max).read_to_end(&mut b).map_err(|e| e.to_string())?;
+    Ok(b)
+}
+
+fn is_sha(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// One line of client/ui/ui.txt, without its bytes yet.
+fn parse_slot_line(line: &str) -> Option<SlotPatch> {
+    let a: Vec<&str> = line.split_whitespace().collect();
+    if a.len() != 6 || a[0].contains("..") || a[0].starts_with('/') || a[0].starts_with('\\') || a[0].contains(':') || !is_sha(a[4]) || !is_sha(a[5]) {
+        return None;
+    }
+    let len: usize = a[2].parse().ok()?;
+    if len == 0 || len > 1 << 24 {
+        return None;
+    }
+    Some(SlotPatch { path: a[0].into(), offset: a[1].parse().ok()?, len, file_size: a[3].parse().ok()?, sha_orig: a[4].to_lowercase(), sha_new: a[5].to_lowercase(), orig: Vec::new(), new: Vec::new() })
+}
+
+/// The patches the vault publishes, with their bytes checked. Any problem: logged, and none (the game as it is).
+fn fetch_slot_patches(vault_key: &str) -> Vec<SlotPatch> {
+    let base = format!("{}/files/{}/client/ui/", base_url(), vault_key);
+    let text = match get_text(&format!("{}ui.txt", base), 10) {
+        Ok(t) => t,
+        Err(e) => {
+            log(&format!("class buttons: no client/ui/ui.txt ({})", e));
+            return Vec::new();
+        }
+    };
+    let mut out = Vec::new();
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let Some(mut p) = parse_slot_line(line) else {
+            log(&format!("class buttons: bad line in ui.txt: {}", line.chars().take(120).collect::<String>()));
+            continue;
+        };
+        let fetch = |sha: &str| get_bytes(&format!("{}{}.bin", base, sha), p.len as u64 + 1).ok().filter(|b| b.len() == p.len && sha256_bytes(b) == sha);
+        match (fetch(&p.sha_orig), fetch(&p.sha_new)) {
+            (Some(o), Some(n)) => {
+                p.orig = o;
+                p.new = n;
+                out.push(p);
+            }
+            _ => log(&format!("class buttons: the bytes of {} could not be fetched or are wrong", p.path)),
+        }
+    }
+    out
+}
+
+#[derive(Debug, PartialEq)]
+enum SlotState {
+    Original,
+    Patched,
+    Other(String), // why it is left alone
+}
+
+fn slot_state(file: &Path, p: &SlotPatch) -> SlotState {
+    let size = std::fs::metadata(file).map(|m| m.len()).unwrap_or(0);
+    if size != p.file_size {
+        return SlotState::Other(format!("size {} instead of {}", size, p.file_size));
+    }
+    let mut b = vec![0u8; p.len];
+    let read = std::fs::File::open(file).and_then(|mut f| {
+        f.seek(SeekFrom::Start(p.offset))?;
+        f.read_exact(&mut b)
+    });
+    if let Err(e) = read {
+        return SlotState::Other(e.to_string());
+    }
+    match sha256_bytes(&b) {
+        h if h == p.sha_orig => SlotState::Original,
+        h if h == p.sha_new => SlotState::Patched,
+        h => SlotState::Other(format!("unknown bytes ({})", &h[..12])),
+    }
+}
+
+/// sha256 of a file with the bytes at [offset, offset + len) replaced: what a patched file was before the patch.
+fn sha256_file_with(file: &Path, offset: u64, bytes: &[u8]) -> std::io::Result<String> {
+    let mut f = std::fs::File::open(file)?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    let mut at = 0u64;
+    let end = offset + bytes.len() as u64;
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        let (from, to) = (offset.max(at), end.min(at + n as u64));
+        if from < to {
+            let (a, b) = ((from - at) as usize, (to - at) as usize);
+            buf[a..b].copy_from_slice(&bytes[(from - offset) as usize..(to - offset) as usize]);
+        }
+        h.update(&buf[..n]);
+        at += n as u64;
+    }
+    Ok(hex::encode(h.finalize()))
+}
+
+/// A game file the vault lists with hash `sha` that differs only by one of our patches: it counts as that file.
+fn patched_equals(file: &Path, path: &str, sha: &str, patches: &[SlotPatch]) -> bool {
+    patches.iter().filter(|p| p.path == path).any(|p| {
+        let ok = slot_state(file, p) == SlotState::Patched && sha256_file_with(file, p.offset, &p.orig).map(|h| h == sha).unwrap_or(false);
+        if ok {
+            log(&format!("{}: patched for the class buttons, otherwise as the vault has it", path));
+        }
+        ok
+    })
+}
+
+/// Writes one patch's new bytes (on) or original bytes (off) when the file holds the other ones; anything else is
+/// left alone and logged. Returns true when it wrote.
+fn apply_slot(file: &Path, p: &SlotPatch, on: bool) -> bool {
+    let (to, what) = match (slot_state(file, p), on) {
+        (SlotState::Original, true) => (&p.new, "class buttons put in"),
+        (SlotState::Patched, false) => (&p.orig, "class buttons taken out, original bytes back"),
+        (SlotState::Other(why), _) => {
+            log(&format!("class buttons: {} left alone: {}", p.path, why));
+            return false;
+        }
+        _ => return false, // already as wanted
+    };
+    let r = std::fs::OpenOptions::new().write(true).open(file).and_then(|mut f| {
+        f.seek(SeekFrom::Start(p.offset))?;
+        f.write_all(to)?;
+        f.sync_all()
+    });
+    match r {
+        Ok(()) => {
+            log(&format!("{}: {}", p.path, what));
+            true
+        }
+        Err(e) => {
+            log(&format!("class buttons: could not write {}: {}", p.path, e));
+            false
+        }
+    }
+}
+
+/// Makes the game folder match the choice, and keeps the vault check's record of each file it wrote (.grp-files:
+/// "size|modified|sha"), so the next start does not hash the 2.7 GB again.
+fn set_class_buttons(game_dir: &Path, patches: &[SlotPatch], on: bool) {
+    let cache_file = game_dir.join(".grp-files");
+    for p in patches {
+        let file = game_dir.join(p.path.replace('/', std::path::MAIN_SEPARATOR_STR));
+        if !apply_slot(&file, p, on) {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&cache_file) else { continue };
+        let lines: Vec<String> = text
+            .lines()
+            .map(|l| match l.split_once('\t') {
+                Some((k, v)) if k == p.path => {
+                    let sha = v.rsplit('|').next().unwrap_or("");
+                    format!("{}\t{}|{}|{}", k, p.file_size, mtime(&file), sha)
+                }
+                _ => l.to_string(),
+            })
+            .collect();
+        let _ = std::fs::write(&cache_file, lines.join("\n") + "\n");
+    }
 }
 
 // ---- client improvements ----
@@ -902,6 +1095,8 @@ pub struct PlayOptions {
     pub client: Option<ClientMods>, // None: client improvements off
     #[cfg_attr(not(windows), allow(dead_code))]
     pub dxvk: bool,                 // "Vulkan (DXVK)"; Windows only, Linux always has Proton's
+    pub class_buttons: bool,        // "Botones de clase": the edited deployment screen in Yeti.big
+    pub run: bool,                  // false: everything but starting the game (--prepare-only)
 }
 
 /// Parses an exact GRP MouseSensitivity value (accepts dot or comma decimals). Empty or non-positive leaves the
@@ -1005,8 +1200,9 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
         return Err(explain(&answer));
     }
     log(&format!("signed in as {}", a[1]));
+    let patches = if o.sync && a.len() >= 4 { fetch_slot_patches(a[3]) } else { Vec::new() };
     if o.sync && a.len() >= 4 {
-        sync_game(a[3], game_dir, progress)?;
+        sync_game(a[3], game_dir, &patches, progress)?;
     }
     if !game_dir.join(GAME_EXE).is_file() {
         return Err(format!("{}:\n{}", tr("No se encontró el ejecutable del juego en", "Game executable not found at"), game_dir.join(GAME_EXE).display()));
@@ -1017,6 +1213,11 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     set_client_mods(vault_key, game_dir, o.client, progress);
     #[cfg(windows)]
     set_dxvk(vault_key, game_dir, o.dxvk, progress);
+    set_class_buttons(game_dir, &patches, o.class_buttons);
+    if !o.run {
+        log("prepared, not started (--prepare-only)");
+        return Ok(());
+    }
     run_game(game_dir, &format!("{}.{}", a[1], a[2]), progress, playing)
 }
 
@@ -1245,6 +1446,61 @@ fn fullscreen_on_hyprland(running: &std::sync::atomic::AtomicBool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn slot_fixture(name: &str) -> (PathBuf, SlotPatch) {
+        let dir = std::env::temp_dir().join(format!("grp-slot-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let data: Vec<u8> = (0..4096u32).map(|i| (i * 7 % 251) as u8).collect();
+        std::fs::write(dir.join("Yeti.big"), &data).unwrap();
+        let orig = data[1000..1100].to_vec();
+        let new: Vec<u8> = orig.iter().map(|b| b ^ 0x5a).collect();
+        let p = SlotPatch { path: "Yeti.big".into(), offset: 1000, len: 100, file_size: 4096, sha_orig: sha256_bytes(&orig), sha_new: sha256_bytes(&new), orig, new };
+        (dir, p)
+    }
+
+    #[test]
+    fn class_buttons_go_in_once_and_come_out_to_the_original_bytes() {
+        let (dir, p) = slot_fixture("cycle");
+        let file = dir.join("Yeti.big");
+        let before = sha256_file(&file).unwrap();
+        assert_eq!(slot_state(&file, &p), SlotState::Original);
+        assert!(apply_slot(&file, &p, true));
+        assert_eq!(slot_state(&file, &p), SlotState::Patched);
+        assert!(!apply_slot(&file, &p, true)); // a second time: nothing to do
+        // the vault's check counts it as the original file
+        assert!(patched_equals(&file, "Yeti.big", &before, std::slice::from_ref(&p)));
+        assert!(!patched_equals(&file, "Yeti.big", &"0".repeat(64), std::slice::from_ref(&p)));
+        assert!(apply_slot(&file, &p, false));
+        assert_eq!(sha256_file(&file).unwrap(), before);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn class_buttons_leave_a_file_with_other_bytes_or_size_alone() {
+        let (dir, p) = slot_fixture("other");
+        let file = dir.join("Yeti.big");
+        let mut data = std::fs::read(&file).unwrap();
+        data[1050] ^= 1;
+        std::fs::write(&file, &data).unwrap();
+        assert!(matches!(slot_state(&file, &p), SlotState::Other(_)));
+        assert!(!apply_slot(&file, &p, true));
+        assert_eq!(std::fs::read(&file).unwrap(), data);
+        data.push(0);
+        std::fs::write(&file, &data).unwrap();
+        assert!(!apply_slot(&file, &p, true));
+        assert_eq!(std::fs::read(&file).unwrap(), data);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ui_txt_lines_are_checked() {
+        let sha = "a".repeat(64);
+        assert!(parse_slot_line(&format!("Yeti.big 702001816 92688 2769768168 {} {}", sha, sha)).is_some());
+        assert!(parse_slot_line(&format!("../x 1 2 3 {} {}", sha, sha)).is_none());
+        assert!(parse_slot_line(&format!("Yeti.big 1 0 3 {} {}", sha, sha)).is_none());
+        assert!(parse_slot_line("Yeti.big 1 2 3 nothex nothex").is_none());
+    }
 
     fn names(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()

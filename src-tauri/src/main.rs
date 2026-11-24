@@ -36,6 +36,7 @@ struct State {
     adsmult: String,    // empty or "1.0": stock multiplier
     scopemult: String,  // empty or "1.0": stock multiplier
     dxvk: bool,
+    classbuttons: bool,
     server: String,
     lang: String,       // "es", "en", or empty the first time: the window picks by the system's language
 }
@@ -66,6 +67,11 @@ fn saved_dxvk(s: &std::collections::HashMap<String, String>) -> bool {
     s.get("dxvk").map_or(true, |v| v != "0")
 }
 
+/// "Botones de clase" as settings.txt keeps it: "classbuttons", on unless "0".
+fn saved_class_buttons(s: &std::collections::HashMap<String, String>) -> bool {
+    s.get("classbuttons").map_or(true, |v| v != "0")
+}
+
 #[tauri::command]
 fn get_state() -> State {
     let s = core::settings();
@@ -84,6 +90,7 @@ fn get_state() -> State {
         adsmult: cm.adsmult,
         scopemult: cm.scopemult,
         dxvk: saved_dxvk(&s),
+        classbuttons: saved_class_buttons(&s),
         server: core::config().server.clone(),
         lang: s.get("lang").cloned().unwrap_or_default(),
     }
@@ -140,6 +147,12 @@ struct PlayArgs {
     #[serde(default)]
     scopemult: String,
     dxvk: bool,
+    #[serde(default = "yes")]
+    classbuttons: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Serialize, Clone)]
@@ -171,6 +184,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("adsmult", args.adsmult.clone()),
             ("scopemult", args.scopemult.clone()),
             ("dxvk", if args.dxvk { "1" } else { "0" }.to_string()),
+            ("classbuttons", if args.classbuttons { "1" } else { "0" }.to_string()),
         ]);
         let progress_app = app.clone();
         let progress = move |text: &str, fraction: f64| {
@@ -192,7 +206,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             let playing_app = app.clone();
             let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult);
             let mouse_sens = core::parse_mouse_sens(&args.mousesens);
-            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, mouse_sens, client, dxvk: args.dxvk };
+            let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, mouse_sens, client, dxvk: args.dxvk, class_buttons: args.classbuttons, run: true };
             error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
             })
@@ -314,7 +328,17 @@ fn main() {
         let cm = saved_client_mods(&saved);
         let client = core::client_mods(cm.on, &cm.maxfps, &cm.fov, cm.focallength, &cm.adsmult, &cm.scopemult);
         let mouse_sens = saved.get("mousesens").and_then(|v| core::parse_mouse_sens(v));
-        let opts = core::PlayOptions { sync: !args.iter().any(|a| a == "--nosync"), width: 0, height: 0, windowed: true, mouse_sens, client, dxvk: saved_dxvk(&saved) };
+        let opts = core::PlayOptions {
+            sync: !args.iter().any(|a| a == "--nosync"),
+            width: 0,
+            height: 0,
+            windowed: true,
+            mouse_sens,
+            client,
+            dxvk: saved_dxvk(&saved),
+            class_buttons: saved_class_buttons(&saved),
+            run: !args.iter().any(|a| a == "--prepare-only"),
+        };
         let r = core::play(
             &name,
             &pw,
