@@ -66,9 +66,15 @@ const TEXT = {
     'set.ads': 'Sensibilidad al apuntar', 'set.focal': 'Escalar por distancia focal', 'set.focal.hint': 'Mantiene una sensación de puntería consistente al hacer zoom, en lugar de la curva original del juego.', 'set.adsmult': 'Multiplicador con mira (ADS)', 'set.scopemult': 'Multiplicador con telescópica',
     'set.side': 'Botones laterales del ratón', 'set.side.hint': 'El juego no reconoce los botones laterales. Elige la tecla que pulsa cada uno y asigna esa tecla a la acción en las opciones del juego.', 'set.side1': 'Botón lateral 1 (atrás)', 'set.side2': 'Botón lateral 2 (adelante)', 'side.none': 'Ninguna', 'side.pgup': 'Re Pág', 'side.pgdn': 'Av Pág', 'side.numpad': 'Teclado numérico {n}',
     'acc.label': 'Cuenta', 'acc.login': 'Entrar', 'acc.create': 'Cuenta nueva', 'acc.name': 'Nickname', 'acc.password': 'Contraseña',
-    'acc.create.hint': 'Gratis y sin correo. Contraseña de al menos 6 caracteres.', 'acc.forgot': '¿Olvidaste tu contraseña?', 'acc.invite': 'Código de invitación',
+    'acc.create.hint': 'Gratis y sin correo. Contraseña de al menos 6 caracteres.', 'acc.forgot': '¿Olvidaste tu contraseña?', 'acc.manage': 'Cambiar contraseña o clave de recuperación', 'acc.invite': 'Código de invitación',
     'play': 'Jugar', 'play.create': 'Crear cuenta y jugar',
-    'reset.title': 'Restablecer contraseña', 'reset.intro': 'Pide un código a un administrador en Discord. Es de un solo uso y caduca en 24 horas.',
+    'reset.title': 'Restablecer contraseña', 'reset.intro': 'Usa tu clave de recuperación o pide un código a un administrador en Discord. Los dos son de un solo uso.',
+    'manage.title': 'Tu cuenta', 'manage.current': 'Contraseña actual', 'manage.key': 'Crear una clave de recuperación nueva',
+    'manage.keyhint': 'La clave de recuperación te deja poner una contraseña nueva sin pedir ayuda. Al crear otra, la anterior deja de valer.',
+    'recovery.title': 'Tu clave de recuperación', 'recovery.copy': 'Copiar', 'recovery.copied': 'Copiada', 'recovery.done': 'Ya la guardé',
+    'recovery.intro': 'Guárdala en un lugar seguro: no se vuelve a mostrar. Con ella puedes poner una contraseña nueva desde «¿Olvidaste tu contraseña?». Sirve una sola vez.',
+    'msg.manage.need': 'Escribe tu nickname, tu contraseña actual y la nueva.', 'msg.manage.needkey': 'Escribe tu nickname y tu contraseña actual.',
+    'msg.manage.busy': 'Cambiando contraseña...', 'msg.manage.done': 'Contraseña cambiada. Inicia sesión con la nueva.', 'msg.manage.keybusy': 'Creando clave...',
     'reset.code': 'Código', 'reset.new': 'Nueva contraseña', 'reset.again': 'Repite la contraseña', 'reset.go': 'Cambiar contraseña', 'reset.back': 'Volver',
     'links.label': 'Enlaces', 'links.status': 'Estado del servidor', 'links.source': 'Código fuente', 'links.support': 'Apoyar el servidor',
     'legal': 'Proyecto comunitario, sin afiliación con Ubisoft.', 'version': 'Launcher {v}',
@@ -106,9 +112,15 @@ const TEXT = {
     'set.ads': 'Aim sensitivity', 'set.focal': 'Scale by focal length', 'set.focal.hint': 'Keeps aiming feel consistent across zoom levels instead of using the game’s default curve.', 'set.adsmult': 'ADS multiplier', 'set.scopemult': 'Scope multiplier',
     'set.side': 'Mouse side buttons', 'set.side.hint': 'The game does not see the side buttons. Pick the key each one presses, then bind that key to the action in the game’s options.', 'set.side1': 'Side button 1 (back)', 'set.side2': 'Side button 2 (forward)', 'side.none': 'None', 'side.pgup': 'Page Up', 'side.pgdn': 'Page Down', 'side.numpad': 'Numpad {n}',
     'acc.label': 'Account', 'acc.login': 'Sign in', 'acc.create': 'New account', 'acc.name': 'Nickname', 'acc.password': 'Password',
-    'acc.create.hint': 'Free, no email required. Password must be at least 6 characters.', 'acc.forgot': 'Forgot your password?', 'acc.invite': 'Invitation code',
+    'acc.create.hint': 'Free, no email required. Password must be at least 6 characters.', 'acc.forgot': 'Forgot your password?', 'acc.manage': 'Change password or recovery key', 'acc.invite': 'Invitation code',
     'play': 'Play', 'play.create': 'Create account and play',
-    'reset.title': 'Reset password', 'reset.intro': 'Ask an admin on Discord for a reset code. Single-use, valid for 24 hours.',
+    'reset.title': 'Reset password', 'reset.intro': 'Use your recovery key, or ask an admin on Discord for a reset code. Both are single-use.',
+    'manage.title': 'Your account', 'manage.current': 'Current password', 'manage.key': 'Create a new recovery key',
+    'manage.keyhint': 'A recovery key lets you set a new password without asking for help. Creating a new one cancels the old one.',
+    'recovery.title': 'Your recovery key', 'recovery.copy': 'Copy', 'recovery.copied': 'Copied', 'recovery.done': 'I saved it',
+    'recovery.intro': 'Keep it somewhere safe: it will not be shown again. Use it under “Forgot your password?” to set a new password. It works once.',
+    'msg.manage.need': 'Enter your nickname, current password, and new password.', 'msg.manage.needkey': 'Enter your nickname and current password.',
+    'msg.manage.busy': 'Updating password...', 'msg.manage.done': 'Password changed. Sign in with the new one.', 'msg.manage.keybusy': 'Creating key...',
     'reset.code': 'Code', 'reset.new': 'New password', 'reset.again': 'Confirm new password', 'reset.go': 'Change password', 'reset.back': 'Back',
     'links.label': 'Links', 'links.status': 'Server status', 'links.source': 'Source code', 'links.support': 'Support the server',
     'legal': 'Community project, not affiliated with Ubisoft.', 'version': 'Launcher {v}',
@@ -409,7 +421,7 @@ function setStatus(text, fraction, kind) {
 function setBusy(busy) {
   if (busy) $('app').dataset.busy = ''; else delete $('app').dataset.busy;
   $('play').disabled = busy;
-  for (const id of ['name', 'password', 'forgot', 'invite', 'create', 'modeLogin', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods', 'classbuttons']) $(id).disabled = busy;
+  for (const id of ['name', 'password', 'forgot', 'account', 'invite', 'create', 'modeLogin', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods', 'classbuttons']) $(id).disabled = busy;
   $('sensApply').disabled = busy || sensComputed === null;
   syncClientMods(busy);
   $('dxvk').disabled = busy || LINUX;
@@ -421,6 +433,7 @@ function syncMode() {
   $('play').classList.toggle('long', creating);
   $('createHint').hidden = !creating;
   $('forgot').hidden = creating;
+  $('account').hidden = creating;
 }
 for (const id of ['create', 'modeLogin']) $(id).addEventListener('change', () => {
   $('inviteRow').hidden = true;
@@ -442,6 +455,80 @@ function showReset(on) {
 }
 $('forgot').addEventListener('click', () => showReset(true));
 $('resetBack').addEventListener('click', () => showReset(false));
+
+// "Cambiar contraseña o clave de recuperación": a third form, with the current password.
+function showAccount(on) {
+  $('form').hidden = on;
+  $('accountForm').hidden = !on;
+  if (on) {
+    $('accName').value = $('name').value.trim();
+    for (const id of ['accPassword', 'accNew', 'accNew2']) $(id).value = '';
+    ($('accName').value ? $('accPassword') : $('accName')).focus();
+  }
+  setStatus('');
+}
+$('account').addEventListener('click', () => showAccount(true));
+$('accountBack').addEventListener('click', () => showAccount(false));
+
+$('accountForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const name = $('accName').value.trim(), password = $('accPassword').value, newPassword = $('accNew').value;
+  if (!name || !password || !newPassword) return setStatus(t('msg.manage.need'), -1, 'fault');
+  if (newPassword.length < 6) return setStatus(t('msg.short'), -1, 'fault');
+  if (newPassword !== $('accNew2').value) return setStatus(t('msg.reset.differ'), -1, 'fault');
+  $('accGo').disabled = true;
+  setStatus(t('msg.manage.busy'));
+  try {
+    await invoke('change_password', { name, password, newPassword });
+    showAccount(false);
+    $('name').value = name;
+    $('password').value = '';
+    $('password').focus();
+    setStatus(t('msg.manage.done'), -1, 'good');
+  } catch (e) {
+    setStatus(String(e), -1, 'fault');
+  } finally {
+    $('accGo').disabled = false;
+  }
+});
+
+$('accKey').addEventListener('click', async () => {
+  const name = $('accName').value.trim(), password = $('accPassword').value;
+  if (!name || !password) return setStatus(t('msg.manage.needkey'), -1, 'fault');
+  $('accKey').disabled = true;
+  setStatus(t('msg.manage.keybusy'));
+  try {
+    showRecovery(await invoke('new_recovery_key', { name, password }));
+    setStatus('');
+  } catch (e) {
+    setStatus(String(e), -1, 'fault');
+  } finally {
+    $('accKey').disabled = false;
+  }
+});
+
+// The recovery key, shown once (after a new account, or on request); the window stays up until the player saved it.
+let recoveryCovers = [];   // the forms the key stands in for while it shows
+function showRecovery(key) {
+  recoveryCovers = ['form', 'resetForm', 'accountForm'].filter((id) => !$(id).hidden);
+  for (const id of recoveryCovers) $(id).hidden = true;
+  $('recoveryKey').textContent = key;
+  $('recoveryCopy').textContent = t('recovery.copy');
+  $('recoveryBox').hidden = false;
+  $('recoveryDone').focus();
+}
+$('recoveryCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('recoveryKey').textContent); $('recoveryCopy').textContent = t('recovery.copied'); } catch (e) { /* select it by hand */ }
+});
+$('recoveryDone').addEventListener('click', () => {
+  $('recoveryBox').hidden = true;
+  $('recoveryKey').textContent = '';
+  for (const id of recoveryCovers) $(id).hidden = false;
+  recoveryCovers = [];
+  if (minimizeWhenSaved && tauri) tauri.window.getCurrentWindow().minimize();
+  minimizeWhenSaved = false;
+});
+let minimizeWhenSaved = false;
 
 $('resetForm').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -763,7 +850,11 @@ watchMore(document.querySelector('.set-scroll'));
 $('form').addEventListener('submit', markNotesSeen);
 
 listen('status', (e) => setStatus(e.payload.text, e.payload.fraction));
-listen('playing', () => { if (tauri) tauri.window.getCurrentWindow().minimize(); });
+listen('recovery', (e) => showRecovery(e.payload));
+listen('playing', () => {
+  if (!$('recoveryBox').hidden) { minimizeWhenSaved = true; return; }   // the key first
+  if (tauri) tauri.window.getCurrentWindow().minimize();
+});
 listen('done', (e) => {
   setBusy(false);
   setStatus(e.payload.error || '', -1, e.payload.error ? 'fault' : '');

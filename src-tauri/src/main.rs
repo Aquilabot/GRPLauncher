@@ -209,8 +209,10 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
         if args.create || !invite.is_empty() {
             progress(core::tr("Creando cuenta...", "Creating account..."), -1.0);
             let r = core::register(invite, &args.name, &args.password);
-            core::log(&format!("register {}: {}", args.name, r));
-            if r != "OK" {
+            core::log(&format!("register {}: {}", args.name, core::loggable(&r)));
+            if let Some(key) = core::recovery_key(&r) {
+                let _ = app.emit("recovery", key);
+            } else if r != "OK" {
                 need_invite = r == "ERR invite";
                 error = Some(core::explain(&r));
             }
@@ -239,6 +241,26 @@ fn reset_password(name: String, code: String, password: String) -> Result<(), St
     } else {
         Err(core::explain(&r))
     }
+}
+
+// "Cambiar contraseña": with the current one. Off the window's thread: it waits for the network.
+#[tauri::command(async)]
+fn change_password(name: String, password: String, new_password: String) -> Result<(), String> {
+    let r = core::change_password(&name, &password, &new_password);
+    core::log(&format!("password change {}: {}", name, r));
+    if r == "OK" {
+        Ok(())
+    } else {
+        Err(core::explain(&r))
+    }
+}
+
+// "Nueva clave de recuperación": the key, shown once; it replaces the earlier one.
+#[tauri::command(async)]
+fn new_recovery_key(name: String, password: String) -> Result<String, String> {
+    let r = core::new_recovery_key(&name, &password);
+    core::log(&format!("new recovery key {}: {}", name, core::loggable(&r)));
+    core::recovery_key(&r).ok_or_else(|| core::explain(&r))
 }
 
 #[derive(Serialize)]
@@ -426,8 +448,8 @@ fn main() {
         let invite = arg(&args, "--invite");
         if args.iter().any(|a| a == "--create") || invite.is_some() {
             let r = core::register(invite.as_deref().unwrap_or(""), &name, &pw);
-            core::log(&format!("register {}: {}", name, r));
-            if r != "OK" {
+            core::log(&format!("register {}: {}", name, core::loggable(&r)));
+            if r != "OK" && core::recovery_key(&r).is_none() {
                 std::process::exit(2);
             }
         }
@@ -477,7 +499,7 @@ fn main() {
     }
     if let Err(e) = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, play, pick_folder, reset_password])
+        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, play, pick_folder, reset_password, change_password, new_recovery_key])
         .run(tauri::generate_context!())
     {
         let msg = e.to_string();

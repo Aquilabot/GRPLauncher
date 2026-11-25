@@ -293,8 +293,8 @@ input[type=range]:disabled::-webkit-slider-runnable-track { border-style: dashed
 #cone.off .edge { stroke: var(--ink-3); }
 
 /* ---- the operator column: account, play, status */
-#form, #resetForm { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-#form label, #resetForm label { margin-top: 11px; }
+#form, #resetForm, #accountForm { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#form label, #resetForm label, #accountForm label { margin-top: 11px; }
 .mode { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line-hi); margin-bottom: 2px; }
 #form .mode label { margin: 0; cursor: pointer; }
 .mode input { position: absolute; opacity: 0; pointer-events: none; }
@@ -309,6 +309,18 @@ input[type=range]:disabled::-webkit-slider-runnable-track { border-style: dashed
 .mode input:disabled + span { color: var(--ink-3); cursor: default; }
 .operator .hint { margin-top: 6px; }
 #forgot { margin-top: 8px; }
+#account { margin-top: 2px; }
+#accountForm .primary { margin-top: 16px; }
+#accountForm .hint { margin-top: 14px; }
+#accKey { margin-top: 4px; }
+#accGo { font-size: 17px; letter-spacing: .12em; text-indent: .12em; }
+/* the recovery key, shown once over the operator column */
+.recovery { flex: 1; min-height: 0; border: 1px solid var(--signal); background: var(--deep); padding: 16px 16px 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.recovery[hidden] { display: none; }
+.recovery h2 { font: 600 16px/1.1 var(--caps); letter-spacing: .1em; text-transform: uppercase; color: var(--signal); }
+.recovery .key { font: 600 17px/1.3 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .02em; color: var(--ink); user-select: all; white-space: nowrap; margin-top: 6px; }
+.recovery-actions { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.recovery-actions .primary { margin: 0; height: 40px; padding: 0 18px; font-size: 16px; letter-spacing: .1em; text-indent: .1em; }
 .reset-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 #resetForm .primary { margin-top: 16px; }
 #form > *, #resetForm > * { flex: none; }

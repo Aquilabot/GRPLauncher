@@ -186,11 +186,31 @@ fn post(path: &str, form: &str) -> String {
 pub fn register(invite: &str, name: &str, password: &str) -> String {
     let invite = invite.trim();
     let body = if invite.is_empty() {
-        format!("name={}&secret={}", escape(name), secret(name, password))
+        format!("name={}&secret={}&recovery=1", escape(name), secret(name, password))
     } else {
-        format!("invite={}&name={}&secret={}", escape(invite), escape(name), secret(name, password))
+        format!("invite={}&name={}&secret={}&recovery=1", escape(invite), escape(name), secret(name, password))
     };
     post("/register", &body)
+}
+
+/// The recovery key in an "OK <key>" answer (/register with recovery=1, /recovery), if there is one.
+pub fn recovery_key(answer: &str) -> Option<String> {
+    answer.strip_prefix("OK ").map(str::trim).filter(|k| !k.is_empty() && !k.contains(' ')).map(str::to_string)
+}
+
+/// An answer fit for the log: the recovery key it may carry never goes there.
+pub fn loggable(answer: &str) -> &str {
+    if recovery_key(answer).is_some() { "OK (recovery key shown to the player)" } else { answer }
+}
+
+/// A new password given the current one: "OK", "ERR login" (wrong current password, or banned)...
+pub fn change_password(name: &str, password: &str, new_password: &str) -> String {
+    post("/password", &format!("name={}&secret={}&newsecret={}", escape(name), secret(name, password), secret(name, new_password)))
+}
+
+/// A new recovery key (it replaces the earlier one): "OK <key>" or "ERR login"...
+pub fn new_recovery_key(name: &str, password: &str) -> String {
+    post("/recovery", &format!("name={}&secret={}", escape(name), secret(name, password)))
 }
 
 fn login(name: &str, password: &str) -> String {
@@ -268,7 +288,8 @@ pub fn fetch_history(name: &str, password: &str, filter: &str, limit: u32) -> Re
     serde_json::from_str::<serde_json::Value>(&resp).map_err(|_| explain(&resp))
 }
 
-/// A new password with the single-use code an admin gave the player: "OK", "ERR code" (wrong, used or expired)...
+/// A new password with the single-use code an admin gave the player, or with the account's recovery key: "OK",
+/// "ERR code" (wrong, used or expired)...
 pub fn reset_password(name: &str, code: &str, password: &str) -> String {
     post("/reset", &format!("name={}&code={}&secret={}", escape(name), escape(code), secret(name, password)))
 }
@@ -306,7 +327,8 @@ fn left(seconds: u64) -> String {
 
 pub fn explain(answer: &str) -> String {
     match answer {
-        "ERR code" => tr("El código no es válido, ya fue usado o caducó. Pide uno nuevo a un administrador.", "Invalid, already used, or expired code. Ask an admin for a new one.").into(),
+        "ERR code" => tr("El código o la clave de recuperación no es válido, ya fue usado o caducó. Pide un código nuevo a un administrador.", "Invalid, already used, or expired code or recovery key. Ask an admin for a new code.").into(),
+        "ERR secret" => tr("La nueva contraseña no es válida.", "The new password is not valid.").into(),
         a if a.starts_with("ERR banned ") => banned(&a[11..]),
         "ERR invite" => tr("El registro requiere un código de invitación válido (o el código ya fue usado).", "Registration requires a valid invitation code, or this code has already been used.").into(),
         "ERR name" => tr("El nickname debe tener de 3 a 16 caracteres: letras, números, guion y guion bajo.", "Nickname must be 3–16 characters: letters, numbers, hyphens, or underscores.").into(),

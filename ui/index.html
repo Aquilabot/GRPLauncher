@@ -257,6 +257,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <input id="password" type="password">
         <p class="hint" id="createHint" data-i18n="acc.create.hint" hidden>Gratis y sin correo. Contraseña de al menos 6 caracteres.</p>
         <button type="button" id="forgot" class="link" data-i18n="acc.forgot">¿Olvidaste tu contraseña?</button>
+        <button type="button" id="account" class="link" data-i18n="acc.manage">Cambiar contraseña o clave de recuperación</button>
 
         <div id="inviteRow" hidden>
           <label for="invite" data-i18n="acc.invite">Código de invitación</label>
@@ -271,17 +272,45 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <h2 data-i18n="reset.title">Restablecer contraseña</h2>
           <button type="button" id="resetBack" class="link" data-i18n="reset.back">Volver</button>
         </div>
-        <p class="hint" data-i18n="reset.intro">Pide un código a un administrador en Discord. Es de un solo uso y caduca en 24 horas.</p>
+        <p class="hint" data-i18n="reset.intro">Usa tu clave de recuperación o pide un código a un administrador en Discord. Los dos son de un solo uso.</p>
         <label for="resetName" data-i18n="acc.name">Nickname</label>
         <input id="resetName" maxlength="16" spellcheck="false">
         <label for="resetCode" data-i18n="reset.code">Código</label>
-        <input id="resetCode" spellcheck="false" placeholder="XXXXX-XXXXX">
+        <input id="resetCode" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX">
         <label for="resetPassword" data-i18n="reset.new">Nueva contraseña</label>
         <input id="resetPassword" type="password">
         <label for="resetPassword2" data-i18n="reset.again">Repite la contraseña</label>
         <input id="resetPassword2" type="password">
         <button id="resetGo" class="primary"><span data-i18n="reset.go">Cambiar contraseña</span></button>
       </form>
+
+      <form id="accountForm" autocomplete="off" hidden>
+        <div class="reset-head">
+          <h2 data-i18n="manage.title">Tu cuenta</h2>
+          <button type="button" id="accountBack" class="link" data-i18n="reset.back">Volver</button>
+        </div>
+        <label for="accName" data-i18n="acc.name">Nickname</label>
+        <input id="accName" maxlength="16" spellcheck="false">
+        <label for="accPassword" data-i18n="manage.current">Contraseña actual</label>
+        <input id="accPassword" type="password">
+        <label for="accNew" data-i18n="reset.new">Nueva contraseña</label>
+        <input id="accNew" type="password">
+        <label for="accNew2" data-i18n="reset.again">Repite la contraseña</label>
+        <input id="accNew2" type="password">
+        <button id="accGo" class="primary"><span data-i18n="reset.go">Cambiar contraseña</span></button>
+        <p class="hint" data-i18n="manage.keyhint">La clave de recuperación te deja poner una contraseña nueva sin pedir ayuda. Al crear otra, la anterior deja de valer.</p>
+        <button type="button" id="accKey" class="link" data-i18n="manage.key">Crear una clave de recuperación nueva</button>
+      </form>
+
+      <div id="recoveryBox" class="recovery" role="alertdialog" aria-labelledby="recoveryTitle" hidden>
+        <h2 id="recoveryTitle" data-i18n="recovery.title">Tu clave de recuperación</h2>
+        <p class="hint" data-i18n="recovery.intro">Guárdala en un lugar seguro: no se vuelve a mostrar. Con ella puedes poner una contraseña nueva desde «¿Olvidaste tu contraseña?». Sirve una sola vez.</p>
+        <output id="recoveryKey" class="key"></output>
+        <div class="recovery-actions">
+          <button type="button" id="recoveryCopy" class="link" data-i18n="recovery.copy">Copiar</button>
+          <button type="button" id="recoveryDone" class="primary"><span data-i18n="recovery.done">Ya la guardé</span></button>
+        </div>
+      </div>
 
       <div class="status" aria-live="polite">
         <div class="gauge" id="gauge" hidden><div id="bar"><div id="fill"></div></div><output id="pct"></output></div>
