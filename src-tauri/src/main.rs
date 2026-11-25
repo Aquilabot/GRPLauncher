@@ -253,6 +253,12 @@ fn get_notes() -> Notes {
     Notes { notes: notes::fetch(), seen: core::settings().get("notesseen").and_then(|v| v.parse().ok()).unwrap_or(0) }
 }
 
+// Match history from POST /history (cached session token or password secret). Off the window's thread.
+#[tauri::command(async)]
+fn get_history(name: String, password: String, filter: String, limit: u32) -> Result<serde_json::Value, String> {
+    core::fetch_history(&name, &password, &filter, limit)
+}
+
 #[tauri::command]
 fn mark_notes_seen(id: u32) {
     let seen: u32 = core::settings().get("notesseen").and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -375,7 +381,7 @@ fn main() {
     core::set_english(core::settings().get("lang").map(String::as_str) == Some("en"));
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, play, pick_folder, reset_password])
+        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, play, pick_folder, reset_password])
         .run(tauri::generate_context!())
         .expect("error while running the launcher");
 }

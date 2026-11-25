@@ -25,7 +25,7 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
 }
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 17;
+pub const VERSION: u32 = 18;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -195,6 +195,77 @@ pub fn register(invite: &str, name: &str, password: &str) -> String {
 
 fn login(name: &str, password: &str) -> String {
     post("/login", &format!("name={}&secret={}&v={}", escape(name), secret(name, password), VERSION))
+}
+
+fn session_cache() -> &'static std::sync::Mutex<Option<(String, String)>> {
+    static CACHE: OnceLock<std::sync::Mutex<Option<(String, String)>>> = OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn remember_session(name: &str, token: &str) {
+    if let Ok(mut g) = session_cache().lock() {
+        *g = Some((name.to_string(), token.to_string()));
+    }
+}
+
+fn cached_session(name: &str) -> Option<(String, String)> {
+    let want = name.trim();
+    if want.is_empty() {
+        return None;
+    }
+    session_cache()
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .filter(|(n, _)| n.eq_ignore_ascii_case(want))
+}
+
+fn clear_session() {
+    if let Ok(mut g) = session_cache().lock() {
+        *g = None;
+    }
+}
+
+/// Fetches the player's recent match history as JSON from POST /history.
+/// Uses the cached session token from the last sign-in when available, falling back to the password secret
+/// without replacing any active game session. Returns Err("NEED_AUTH") when neither is available.
+pub fn fetch_history(name: &str, password: &str, filter: &str, limit: u32) -> Result<serde_json::Value, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("NEED_AUTH".into());
+    }
+    let flt = match filter {
+        "pvp" => "pvp",
+        "bots" => "bots",
+        _ => "all",
+    };
+    let lim = limit.clamp(1, 50);
+    let mut used_token = false;
+    let resp = if let Some((stored, tok)) = cached_session(name) {
+        used_token = true;
+        post("/history", &format!("name={}&token={}&limit={}&filter={}", escape(&stored), escape(&tok), lim, flt))
+    } else if !password.is_empty() {
+        post("/history", &format!("name={}&secret={}&limit={}&filter={}", escape(name), secret(name, password), lim, flt))
+    } else {
+        return Err("NEED_AUTH".into());
+    };
+    let resp = if resp == "ERR auth" && used_token {
+        clear_session();
+        if !password.is_empty() {
+            post("/history", &format!("name={}&secret={}&limit={}&filter={}", escape(name), secret(name, password), lim, flt))
+        } else {
+            return Err("NEED_AUTH".into());
+        }
+    } else {
+        resp
+    };
+    if resp == "ERR auth" {
+        return Err("NEED_AUTH".into());
+    }
+    if resp.starts_with("ERR ") || resp.starts_with("NET ") {
+        return Err(explain(&resp));
+    }
+    serde_json::from_str::<serde_json::Value>(&resp).map_err(|_| explain(&resp))
 }
 
 /// A new password with the single-use code an admin gave the player: "OK", "ERR code" (wrong, used or expired)...
@@ -1230,6 +1301,7 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
         return Err(explain(&answer));
     }
     log(&format!("signed in as {}", a[1]));
+    remember_session(a[1], a[2]);
     let patches = if o.sync && a.len() >= 4 { fetch_slot_patches(a[3]) } else { Vec::new() };
     if o.sync && a.len() >= 4 {
         sync_game(a[3], game_dir, &patches, progress)?;

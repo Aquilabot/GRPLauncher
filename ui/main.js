@@ -1,5 +1,5 @@
-// The launcher window. The work happens in the Rust side (commands get_state, get_notes, mark_notes_seen, play,
-// pick_folder, reset_password, set_lang, open_link); this file collects what the player typed, shows the progress
+// The launcher window. The work happens in the Rust side (commands get_state, get_notes, get_history, mark_notes_seen,
+// play, pick_folder, reset_password, set_lang, open_link); this file collects what the player typed, shows the progress
 // events and draws the two diagrams (the terrain of the home view, the view cone of the settings).
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
@@ -10,17 +10,48 @@ const PREVIEW_NOTES = { seen: 25, notes: [
   { id: 25, date: '2026-11-23', tag: 'juego', title: 'Cajas sorpresa y control del ratón', items: ['Ya funcionan las cajas sorpresa (Mystery Boxes) en la tienda.', 'Campo de visión configurable de 70° a 110° y multiplicadores propios para apuntar.'] },
   { id: 24, date: '2026-11-22', tag: 'launcher', title: 'Registro abierto', items: ['Crear una cuenta nueva ya no requiere código de invitación.'] },
 ] };
-const invoke = tauri ? tauri.core.invoke : async (cmd) => (cmd === 'get_state' ? PREVIEW : cmd === 'get_notes' ? PREVIEW_NOTES : null);
+const PREVIEW_NOW = Math.floor(Date.now() / 1000);
+const PREVIEW_MATCHES = [
+  { match_id: 'm1', ended_at: PREVIEW_NOW - 720, map: 'Metro', mode: 'Conquest', won: true, class: 'Assault', rounds: 2, kills: 18, deaths: 6, assists: 5, captures: 3, score: 3420, xp: 480, credits: 195, has_bots: false },
+  { match_id: 'm2', ended_at: PREVIEW_NOW - 3900, map: 'Attica Heights', mode: 'Conquest', won: false, class: 'Recon', rounds: 2, kills: 11, deaths: 9, assists: 3, captures: 1, score: 2150, xp: 290, credits: 120, has_bots: false },
+  { match_id: 'm3', ended_at: PREVIEW_NOW - 10800, map: 'Tomsk-9', mode: 'Holdout', won: true, class: 'Support', rounds: 1, kills: 14, deaths: 4, assists: 7, captures: 2, score: 2890, xp: 410, credits: 165, has_bots: true },
+  { match_id: 'm4', ended_at: PREVIEW_NOW - 86400, map: 'Peshawar Market', mode: 'Conquest', won: true, class: 'Assault', rounds: 2, kills: 22, deaths: 8, assists: 4, captures: 4, score: 4110, xp: 530, credits: 220, has_bots: false },
+  { match_id: 'm5', ended_at: PREVIEW_NOW - 172800, map: 'Balaklava Sub-Pen', mode: 'Conquest', won: false, class: 'Support', rounds: 2, kills: 7, deaths: 10, assists: 9, captures: 1, score: 1780, xp: 240, credits: 95, has_bots: false },
+  { match_id: 'm6', ended_at: PREVIEW_NOW - 345600, map: 'Chertanovo', mode: 'Holdout', won: true, class: 'Recon', rounds: 1, kills: 16, deaths: 3, assists: 2, captures: 2, score: 2640, xp: 375, credits: 150, has_bots: true },
+];
+let previewHistoryMode = 'ok';
+function previewHistory(filter) {
+  if (previewHistoryMode === 'auth') return Promise.reject('NEED_AUTH');
+  const list = previewHistoryMode === 'empty' ? [] : PREVIEW_MATCHES.filter((m) => (filter === 'pvp' ? !m.has_bots : filter === 'bots' ? m.has_bots : true));
+  const summary = { total: list.length, wins: 0, losses: 0, kills: 0, deaths: 0, assists: 0, captures: 0, score: 0 };
+  for (const m of list) {
+    if (m.won) summary.wins++; else summary.losses++;
+    summary.kills += m.kills; summary.deaths += m.deaths; summary.assists += m.assists; summary.captures += m.captures; summary.score += m.score;
+  }
+  return Promise.resolve({ player: 'Aquila', pid: 4660, summary, matches: list });
+}
+const invoke = tauri ? tauri.core.invoke : async (cmd, args) => (
+  cmd === 'get_state' ? PREVIEW : cmd === 'get_notes' ? PREVIEW_NOTES : cmd === 'get_history' ? previewHistory(args?.filter) : null
+);
 const listen = tauri ? tauri.event.listen : async () => {};
 
 // ---- the two languages. Spanish is the server's home language; English for everybody else.
 const TEXT = {
   es: {
-    'nav.label': 'Secciones', 'nav.home': 'Inicio', 'nav.settings': 'Ajustes', 'lang.label': 'Idioma',
+    'nav.label': 'Secciones', 'nav.home': 'Inicio', 'nav.history': 'Historial', 'nav.settings': 'Ajustes', 'lang.label': 'Idioma',
     'server.name': 'Servidor comunitario', 'server.place': 'São Paulo · 60 Hz',
     'notes.title': 'Novedades', 'notes.empty': 'Aún no hay novedades.', 'notes.new1': '1 nueva', 'notes.newN': '{n} nuevas', 'notes.fresh': 'Nuevo',
     'notes.pager': 'Paginación de novedades', 'notes.prev': 'Página anterior', 'notes.next': 'Página siguiente',
     'tag.servidor': 'Servidor', 'tag.launcher': 'Launcher', 'tag.juego': 'Juego',
+    'hist.title': 'Historial', 'hist.filter': 'Filtro de partidas', 'hist.filter.all': 'Todo', 'hist.refresh': 'Actualizar',
+    'hist.loading': 'Cargando historial...', 'hist.empty': 'Aún no hay partidas registradas con este filtro.',
+    'hist.auth': 'Escribe tu nickname y contraseña a la derecha para consultar tu historial.',
+    'hist.load': 'Cargar historial', 'hist.retry': 'Reintentar',
+    'hist.kpi.matches': 'Partidas', 'hist.kpi.winrate': 'Victorias', 'hist.kpi.score': 'Puntos',
+    'hist.record': '{w}V · {l}D', 'hist.winsub': '{w} de {n}', 'hist.caps': '{n} capturas',
+    'hist.win': 'Victoria', 'hist.loss': 'Derrota', 'hist.rounds': '{n}R', 'hist.pts': '{n} pts', 'hist.cap': '{n} cap',
+    'hist.age.now': 'ahora', 'hist.age.m': 'hace {n}m', 'hist.age.h': 'hace {n}h', 'hist.age.d': 'hace {n}d',
+    'mode.Conquest': 'Conquista', 'mode.Holdout': 'Resistencia', 'mode.Onslaught': 'Asalto',
     'set.game': 'Juego', 'set.gamedir': 'Carpeta del juego', 'set.browse': 'Examinar', 'set.gamedir.hint': 'Si el juego no está en esta carpeta, se descargará aquí (~4 GB).',
     'set.resolution': 'Resolución', 'set.windowed': 'En ventana', 'set.res.auto': 'Automática ({w} × {h})',
     'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Activado', 'set.dxvk.hint': 'Si tu gráfica no soporta Vulkan 1.3 o el juego falla al abrir, vuelve a DirectX 9 automáticamente.', 'set.dxvk.linux': 'En Linux el juego ya usa Vulkan con el DXVK de Proton.', 'set.classbuttons': 'Botones de clase', 'set.classbuttons.hint': 'ASSAULT, RECON y SUPPORT en la pantalla de despliegue, para cambiar de clase en plena partida.',
@@ -47,11 +78,20 @@ const TEXT = {
     months: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
   },
   en: {
-    'nav.label': 'Sections', 'nav.home': 'Home', 'nav.settings': 'Settings', 'lang.label': 'Language',
+    'nav.label': 'Sections', 'nav.home': 'Home', 'nav.history': 'History', 'nav.settings': 'Settings', 'lang.label': 'Language',
     'server.name': 'Community server', 'server.place': 'São Paulo · 60 Hz',
     'notes.title': 'Release notes', 'notes.empty': 'No updates published yet.', 'notes.new1': '1 new', 'notes.newN': '{n} new', 'notes.fresh': 'New',
     'notes.pager': 'Release notes pages', 'notes.prev': 'Previous page', 'notes.next': 'Next page',
     'tag.servidor': 'Server', 'tag.launcher': 'Launcher', 'tag.juego': 'Game',
+    'hist.title': 'Match history', 'hist.filter': 'Match filter', 'hist.filter.all': 'All', 'hist.refresh': 'Refresh',
+    'hist.loading': 'Loading match history...', 'hist.empty': 'No matches recorded for this filter yet.',
+    'hist.auth': 'Enter your nickname and password on the right to view your match history.',
+    'hist.load': 'Load history', 'hist.retry': 'Retry',
+    'hist.kpi.matches': 'Matches', 'hist.kpi.winrate': 'Win rate', 'hist.kpi.score': 'Score',
+    'hist.record': '{w}W · {l}L', 'hist.winsub': '{w} of {n}', 'hist.caps': '{n} captures',
+    'hist.win': 'Victory', 'hist.loss': 'Defeat', 'hist.rounds': '{n}R', 'hist.pts': '{n} pts', 'hist.cap': '{n} cap',
+    'hist.age.now': 'just now', 'hist.age.m': '{n}m ago', 'hist.age.h': '{n}h ago', 'hist.age.d': '{n}d ago',
+    'mode.Conquest': 'Conquest', 'mode.Holdout': 'Holdout', 'mode.Onslaught': 'Onslaught',
     'set.game': 'Game', 'set.gamedir': 'Game folder', 'set.browse': 'Browse', 'set.gamedir.hint': 'Downloads the game here if missing (~4 GB).',
     'set.resolution': 'Resolution', 'set.windowed': 'Windowed', 'set.res.auto': 'Auto ({w} × {h})',
     'set.dxvk': 'Vulkan (DXVK)', 'set.on': 'Enabled', 'set.dxvk.hint': 'Automatically falls back to DirectX 9 if your GPU lacks Vulkan 1.3 or fails to launch.', 'set.dxvk.linux': 'On Linux, the game already runs on Vulkan through Proton’s DXVK.', 'set.classbuttons': 'Class buttons', 'set.classbuttons.hint': 'ASSAULT, RECON and SUPPORT on the deployment screen, to change class mid-match.',
@@ -100,21 +140,29 @@ for (const b of document.querySelectorAll('.lang button')) b.addEventListener('c
   invoke('set_lang', { lang }).catch(() => {});
 });
 
-// ---- the two views of the left field
+// ---- the views of the left field
+const VIEWS = [
+  ['home', 'tabHome', 'viewHome'],
+  ['history', 'tabHistory', 'viewHistory'],
+  ['settings', 'tabSettings', 'viewSettings'],
+];
 function showView(view) {
   $('app').dataset.view = view;
-  $('viewHome').hidden = view !== 'home';
-  $('viewSettings').hidden = view !== 'settings';
-  $('tabHome').setAttribute('aria-selected', String(view === 'home'));
-  $('tabSettings').setAttribute('aria-selected', String(view === 'settings'));
+  for (const [id, tabId, panelId] of VIEWS) {
+    $(panelId).hidden = view !== id;
+    $(tabId).setAttribute('aria-selected', String(view === id));
+  }
+  if (view === 'history') ensureHistory();
 }
-$('tabHome').addEventListener('click', () => showView('home'));
-$('tabSettings').addEventListener('click', () => showView('settings'));
-for (const tab of [$('tabHome'), $('tabSettings')]) tab.addEventListener('keydown', (ev) => {
-  if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
-  const other = tab === $('tabHome') ? $('tabSettings') : $('tabHome');
-  other.focus(); other.click();
-});
+for (const [id, tabId] of VIEWS) {
+  $(tabId).addEventListener('click', () => showView(id));
+  $(tabId).addEventListener('keydown', (ev) => {
+    if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+    const i = VIEWS.findIndex((v) => v[0] === id);
+    const next = VIEWS[(i + (ev.key === 'ArrowRight' ? 1 : VIEWS.length - 1)) % VIEWS.length];
+    $(next[1]).focus(); $(next[1]).click();
+  });
+}
 
 // ---- the terrain of the home view: rows of a height field, far to near, each hiding what lies behind it
 const SERVER_AT = { u: 0.4, v: 0.42 };
@@ -527,6 +575,180 @@ function markNotesSeen() {
 
 for (const ev of ['pointerdown', 'wheel', 'keydown']) $('notesList').addEventListener(ev, markNotesSeen, { passive: true });
 
+// Match history: fetched on demand from POST /history using the cached session token or the credentials on the right.
+let histFilter = 'all', histState = 'idle', histData = null, histError = '', histLoadedKey = '', histDirty = true, histReq = 0;
+
+function showAge(ts) {
+  if (!ts) return '';
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  if (diff < 90) return t('hist.age.now');
+  if (diff < 3600) return t('hist.age.m', { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t('hist.age.h', { n: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7) return t('hist.age.d', { n: Math.floor(diff / 86400) });
+  const d = new Date(ts * 1000);
+  const month = TEXT[lang].months[d.getMonth()];
+  return month ? (lang === 'en' ? `${month} ${d.getDate()}` : `${d.getDate()} ${month}`) : '';
+}
+
+function showMode(mode) {
+  const key = `mode.${mode}`;
+  return TEXT[lang][key] || mode || '';
+}
+
+function showInt(n) {
+  return Number(n || 0).toLocaleString(lang === 'en' ? 'en-US' : 'es-ES');
+}
+
+function drawHistory() {
+  for (const b of document.querySelectorAll('.hist-filter button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.filter === histFilter));
+    b.disabled = histState === 'loading';
+  }
+  $('histRefresh').disabled = histState === 'loading';
+
+  const player = histData && histData.player ? histData.player : '';
+  $('histPlayer').hidden = !player;
+  $('histPlayer').textContent = player;
+
+  const matches = (histData && Array.isArray(histData.matches)) ? histData.matches : [];
+  const summary = (histData && histData.summary) || null;
+  const hasMatches = histState === 'ok' && matches.length > 0;
+
+  $('histSummary').hidden = !hasMatches || !summary;
+  if (hasMatches && summary) {
+    const total = Number(summary.total || matches.length);
+    const wins = Number(summary.wins || 0);
+    const losses = Number(summary.losses || 0);
+    const kills = Number(summary.kills || 0);
+    const deaths = Number(summary.deaths || 0);
+    const assists = Number(summary.assists || 0);
+    const pct = total > 0 ? Math.round((wins / total) * 100) : 0;
+    const kd = (kills / Math.max(1, deaths)).toFixed(2);
+    $('histTotal').textContent = showInt(total);
+    $('histRecord').textContent = t('hist.record', { w: wins, l: losses });
+    $('histWinrate').textContent = `${pct} %`;
+    $('histWinSub').textContent = t('hist.winsub', { w: wins, n: total });
+    $('histKd').textContent = kd;
+    $('histKda').textContent = `${kills} / ${deaths} / ${assists}`;
+    $('histScore').textContent = showInt(summary.score || 0);
+    $('histCaps').textContent = t('hist.caps', { n: showInt(summary.captures || 0) });
+  }
+
+  $('histList').hidden = !hasMatches;
+  if (hasMatches) {
+    $('histNotice').hidden = true;
+    $('histList').replaceChildren(...matches.map((m) => {
+      const row = el('article', `hist-row ${m.won ? 'win' : 'loss'}`);
+      const res = el('div', 'hist-res');
+      res.append(el('span', 'hist-outcome', t(m.won ? 'hist.win' : 'hist.loss')));
+      const age = showAge(m.ended_at);
+      if (age) res.append(el('span', 'hist-age', age));
+
+      const main = el('div', 'hist-main');
+      const head = el('div', 'hist-row-head');
+      head.append(el('span', 'hist-map', m.map || '?'));
+      const modeText = showMode(m.mode);
+      if (modeText) head.append(el('span', 'sep'), el('span', 'hist-mode', modeText));
+      head.append(el('span', m.has_bots ? 'hist-tag' : 'hist-tag pvp', m.has_bots ? 'Bots' : 'PvP'));
+
+      const metaParts = [];
+      if (m.class) metaParts.push(m.class);
+      if (m.rounds) metaParts.push(t('hist.rounds', { n: m.rounds }));
+      if (m.xp) metaParts.push(`+${showInt(m.xp)} XP`);
+      if (m.credits) metaParts.push(`+${showInt(m.credits)} RP`);
+      main.append(head, el('p', 'hist-meta', metaParts.join(' · ')));
+
+      const stats = el('div', 'hist-stats');
+      stats.append(el('span', 'hist-kda', `${m.kills ?? 0} / ${m.deaths ?? 0} / ${m.assists ?? 0}`));
+      const ptsParts = [t('hist.pts', { n: showInt(m.score || 0) })];
+      if (m.captures > 0) ptsParts.push(t('hist.cap', { n: m.captures }));
+      stats.append(el('span', 'hist-pts', ptsParts.join(' · ')));
+
+      row.append(res, main, stats);
+      return row;
+    }));
+    return;
+  }
+
+  $('histNotice').hidden = false;
+  const msg = $('histMsg');
+  const btn = $('histAction');
+  msg.className = '';
+  btn.hidden = true;
+  if (histState === 'loading') {
+    msg.textContent = t('hist.loading');
+  } else if (histState === 'auth') {
+    msg.textContent = t('hist.auth');
+    btn.textContent = t('hist.load');
+    btn.hidden = false;
+  } else if (histState === 'error') {
+    msg.textContent = histError;
+    msg.className = 'fault';
+    btn.textContent = t('hist.retry');
+    btn.hidden = false;
+  } else {
+    msg.textContent = t('hist.empty');
+  }
+}
+fresh.push(drawHistory);
+
+async function loadHistory(silent = false) {
+  const name = $('name').value.trim();
+  const password = $('password').value;
+  const key = `${name.toLowerCase()}|${histFilter}`;
+  const req = ++histReq;
+  if (!silent) {
+    histState = 'loading';
+    histError = '';
+    drawHistory();
+  }
+  try {
+    const r = await invoke('get_history', { name, password, filter: histFilter, limit: 30 });
+    if (req !== histReq) return;
+    histData = r;
+    histState = 'ok';
+    histError = '';
+    histLoadedKey = key;
+    histDirty = false;
+    drawHistory();
+    $('histList').scrollTop = 0;
+  } catch (e) {
+    if (req !== histReq) return;
+    const s = String(e || '');
+    if (s === 'NEED_AUTH') {
+      histData = null;
+      histState = 'auth';
+      histError = '';
+    } else {
+      histState = 'error';
+      histError = s;
+    }
+    drawHistory();
+  }
+}
+
+function ensureHistory() {
+  const key = `${$('name').value.trim().toLowerCase()}|${histFilter}`;
+  if (histState === 'loading') return;
+  if (!histDirty && histState === 'ok' && histLoadedKey === key) return;
+  loadHistory();
+}
+
+for (const b of document.querySelectorAll('.hist-filter button')) b.addEventListener('click', () => {
+  if (b.dataset.filter === histFilter) return;
+  histFilter = b.dataset.filter;
+  histDirty = true;
+  loadHistory();
+});
+$('histRefresh').addEventListener('click', () => loadHistory());
+$('histAction').addEventListener('click', () => {
+  if (histState === 'auth') {
+    if (!$('name').value.trim()) { $('name').focus(); return; }
+    if (!$('password').value) { $('password').focus(); return; }
+  }
+  loadHistory();
+});
+
 // A list that goes on below its edge fades there, until the player reaches the end.
 function watchMore(box) {
   const sync = () => box.classList.toggle('more', box.scrollHeight - box.scrollTop - box.clientHeight > 8);
@@ -536,6 +758,7 @@ function watchMore(box) {
   sync();
 }
 watchMore($('notesList'));
+watchMore($('histList'));
 watchMore(document.querySelector('.set-scroll'));
 $('form').addEventListener('submit', markNotesSeen);
 
@@ -553,6 +776,8 @@ listen('done', (e) => {
   }
   if (tauri) { const w = tauri.window.getCurrentWindow(); w.unminimize(); w.setFocus(); }
   loadNotes(); // the server may have changed while the player was in the game
+  histDirty = true;
+  if ($('app').dataset.view === 'history' && !e.payload.error) loadHistory(true);
   invoke('get_state').then((s) => showDxvk(s.dxvk)); // a game that failed on Vulkan turned it off
 });
 
@@ -588,9 +813,12 @@ listen('done', (e) => {
   if (!tauri) preview(location.hash.slice(1).split(','));
 })();
 
-// Outside the launcher only: states to look at, named in the address (index.html#settings,en,create,busy,calc,fault).
+// Outside the launcher only: states to look at, named in the address (index.html#history,settings,en,create,busy,calc,fault).
 function preview(want) {
   if (want.includes('en')) applyLang('en');
+  if (want.includes('auth')) previewHistoryMode = 'auth';
+  if (want.includes('empty')) previewHistoryMode = 'empty';
+  if (want.includes('history')) showView('history');
   if (want.includes('settings')) showView('settings');
   if (want.includes('create')) { $('create').checked = true; syncMode(); }
   if (want.includes('calc')) { showSensCalc(true); $('sensInput').value = '30'; updateSensCalc(); }

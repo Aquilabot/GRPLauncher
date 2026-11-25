@@ -33,6 +33,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
     <nav class="tabs" role="tablist" aria-label="Secciones" data-i18n-aria="nav.label">
       <button type="button" role="tab" id="tabHome" aria-controls="viewHome" aria-selected="true" data-i18n="nav.home">Inicio</button>
+      <button type="button" role="tab" id="tabHistory" aria-controls="viewHistory" aria-selected="false" data-i18n="nav.history">Historial</button>
       <button type="button" role="tab" id="tabSettings" aria-controls="viewSettings" aria-selected="false" data-i18n="nav.settings">Ajustes</button>
     </nav>
     <div class="lang" role="group" aria-label="Idioma" data-i18n-aria="lang.label">
@@ -66,6 +67,50 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div id="notesList" tabindex="0"></div>
         <p class="notes-empty" id="notesEmpty" data-i18n="notes.empty" hidden>Aún no hay novedades.</p>
       </div>
+    </section>
+
+    <section class="field history" id="viewHistory" role="tabpanel" aria-labelledby="tabHistory" hidden>
+      <div class="hist-head">
+        <div class="hist-title">
+          <h2 data-i18n="hist.title">Historial</h2>
+          <span id="histPlayer" hidden></span>
+        </div>
+        <div class="hist-controls">
+          <div class="hist-filter" role="group" aria-label="Filtro de partidas" data-i18n-aria="hist.filter">
+            <button type="button" data-filter="all" aria-pressed="true" data-i18n="hist.filter.all">Todo</button>
+            <button type="button" data-filter="pvp" aria-pressed="false">PvP</button>
+            <button type="button" data-filter="bots" aria-pressed="false">Bots</button>
+          </div>
+          <button type="button" id="histRefresh" class="hist-btn" data-i18n="hist.refresh">Actualizar</button>
+        </div>
+      </div>
+      <div class="hist-summary" id="histSummary" hidden>
+        <div class="hist-kpi">
+          <span class="hist-kpi-label" data-i18n="hist.kpi.matches">Partidas</span>
+          <strong class="hist-kpi-val" id="histTotal">0</strong>
+          <span class="hist-kpi-sub" id="histRecord"></span>
+        </div>
+        <div class="hist-kpi">
+          <span class="hist-kpi-label" data-i18n="hist.kpi.winrate">Victorias</span>
+          <strong class="hist-kpi-val" id="histWinrate">0 %</strong>
+          <span class="hist-kpi-sub" id="histWinSub"></span>
+        </div>
+        <div class="hist-kpi">
+          <span class="hist-kpi-label">K / D</span>
+          <strong class="hist-kpi-val" id="histKd">0.00</strong>
+          <span class="hist-kpi-sub" id="histKda"></span>
+        </div>
+        <div class="hist-kpi">
+          <span class="hist-kpi-label" data-i18n="hist.kpi.score">Puntos</span>
+          <strong class="hist-kpi-val" id="histScore">0</strong>
+          <span class="hist-kpi-sub" id="histCaps"></span>
+        </div>
+      </div>
+      <div class="hist-notice" id="histNotice" hidden>
+        <p id="histMsg"></p>
+        <button type="button" id="histAction" class="ghost" hidden></button>
+      </div>
+      <div id="histList" tabindex="0" hidden></div>
     </section>
 
     <section class="field settings" id="viewSettings" role="tabpanel" aria-labelledby="tabSettings" hidden>
