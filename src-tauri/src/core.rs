@@ -25,7 +25,7 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
 }
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 18;
+pub const VERSION: u32 = 19;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -561,6 +561,7 @@ fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: 
 // A file whose bytes at that place are neither is left alone. The vault's check of the game files counts a patched
 // file as its original (patched_equals), so it is never downloaded again for it.
 
+#[derive(Clone)]
 pub struct SlotPatch {
     path: String,
     offset: u64,
@@ -600,20 +601,20 @@ fn parse_slot_line(line: &str) -> Option<SlotPatch> {
     Some(SlotPatch { path: a[0].into(), offset: a[1].parse().ok()?, len, file_size: a[3].parse().ok()?, sha_orig: a[4].to_lowercase(), sha_new: a[5].to_lowercase(), orig: Vec::new(), new: Vec::new() })
 }
 
-/// The patches the vault publishes, with their bytes checked. Any problem: logged, and none (the game as it is).
-fn fetch_slot_patches(vault_key: &str) -> Vec<SlotPatch> {
+/// The patches published in `client/ui/<listing>`, with their bytes checked. Any problem: logged, and none.
+fn fetch_slot_patches_from(vault_key: &str, listing: &str) -> Vec<SlotPatch> {
     let base = format!("{}/files/{}/client/ui/", base_url(), vault_key);
-    let text = match get_text(&format!("{}ui.txt", base), 10) {
+    let text = match get_text(&format!("{}{}", base, listing), 10) {
         Ok(t) => t,
         Err(e) => {
-            log(&format!("class buttons: no client/ui/ui.txt ({})", e));
+            log(&format!("ui patches: no client/ui/{} ({})", listing, e));
             return Vec::new();
         }
     };
     let mut out = Vec::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let Some(mut p) = parse_slot_line(line) else {
-            log(&format!("class buttons: bad line in ui.txt: {}", line.chars().take(120).collect::<String>()));
+            log(&format!("ui patches: bad line in {}: {}", listing, line.chars().take(120).collect::<String>()));
             continue;
         };
         let fetch = |sha: &str| get_bytes(&format!("{}{}.bin", base, sha), p.len as u64 + 1).ok().filter(|b| b.len() == p.len && sha256_bytes(b) == sha);
@@ -623,7 +624,7 @@ fn fetch_slot_patches(vault_key: &str) -> Vec<SlotPatch> {
                 p.new = n;
                 out.push(p);
             }
-            _ => log(&format!("class buttons: the bytes of {} could not be fetched or are wrong", p.path)),
+            _ => log(&format!("ui patches: the bytes of {} in {} could not be fetched or are wrong", p.path, listing)),
         }
     }
     out
@@ -656,38 +657,49 @@ fn slot_state(file: &Path, p: &SlotPatch) -> SlotState {
     }
 }
 
-/// sha256 of a file with the bytes at [offset, offset + len) replaced: what a patched file was before the patch.
-fn sha256_file_with(file: &Path, offset: u64, bytes: &[u8]) -> std::io::Result<String> {
+/// sha256 of a file with the bytes at each (offset, orig) replaced: what a multi-patched file was before the patches.
+fn sha256_file_with_slots(file: &Path, reps: &[(u64, &[u8])]) -> std::io::Result<String> {
     let mut f = std::fs::File::open(file)?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 20];
     let mut at = 0u64;
-    let end = offset + bytes.len() as u64;
     loop {
         let n = f.read(&mut buf)?;
         if n == 0 {
             break;
         }
-        let (from, to) = (offset.max(at), end.min(at + n as u64));
-        if from < to {
-            let (a, b) = ((from - at) as usize, (to - at) as usize);
-            buf[a..b].copy_from_slice(&bytes[(from - offset) as usize..(to - offset) as usize]);
+        let end_chunk = at + n as u64;
+        for &(offset, bytes) in reps {
+            let end = offset + bytes.len() as u64;
+            let (from, to) = (offset.max(at), end.min(end_chunk));
+            if from < to {
+                let (a, b) = ((from - at) as usize, (to - at) as usize);
+                buf[a..b].copy_from_slice(&bytes[(from - offset) as usize..(to - offset) as usize]);
+            }
         }
         h.update(&buf[..n]);
-        at += n as u64;
+        at = end_chunk;
     }
     Ok(hex::encode(h.finalize()))
 }
 
-/// A game file the vault lists with hash `sha` that differs only by one of our patches: it counts as that file.
+/// A game file the vault lists with hash `sha` that differs only by one or more of our non-overlapping UI patches:
+/// it counts as that file so the launcher never redownloads Yeti.big.
 fn patched_equals(file: &Path, path: &str, sha: &str, patches: &[SlotPatch]) -> bool {
-    patches.iter().filter(|p| p.path == path).any(|p| {
-        let ok = slot_state(file, p) == SlotState::Patched && sha256_file_with(file, p.offset, &p.orig).map(|h| h == sha).unwrap_or(false);
-        if ok {
-            log(&format!("{}: patched for the class buttons, otherwise as the vault has it", path));
+    let mut active: Vec<(u64, &[u8])> = Vec::new();
+    for p in patches.iter().filter(|p| p.path == path) {
+        if slot_state(file, p) == SlotState::Patched && !active.iter().any(|&(off, b)| off == p.offset && b.len() == p.len) {
+            active.push((p.offset, &p.orig));
         }
-        ok
-    })
+    }
+    if active.is_empty() {
+        return false;
+    }
+    let ok = sha256_file_with_slots(file, &active).map(|h| h == sha).unwrap_or(false);
+    if ok {
+        log(&format!("{}: patched ({} UI slot(s)), otherwise as the vault has it", path, active.len()));
+    }
+    ok
 }
 
 /// Writes one patch's new bytes (on) or original bytes (off) when the file holds the other ones; anything else is
@@ -1302,9 +1314,13 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     }
     log(&format!("signed in as {}", a[1]));
     remember_session(a[1], a[2]);
-    let patches = if o.sync && a.len() >= 4 { fetch_slot_patches(a[3]) } else { Vec::new() };
+    let class_patches = if o.sync && a.len() >= 4 { fetch_slot_patches_from(a[3], "ui.txt") } else { Vec::new() };
+    let profile_patches = if o.sync && a.len() >= 4 { fetch_slot_patches_from(a[3], "ui-profile.txt") } else { Vec::new() };
+    let mut all_patches: Vec<SlotPatch> = Vec::with_capacity(class_patches.len() + profile_patches.len());
+    all_patches.extend(class_patches.iter().cloned());
+    all_patches.extend(profile_patches.iter().cloned());
     if o.sync && a.len() >= 4 {
-        sync_game(a[3], game_dir, &patches, progress)?;
+        sync_game(a[3], game_dir, &all_patches, progress)?;
     }
     if !game_dir.join(GAME_EXE).is_file() {
         return Err(format!("{}:\n{}", tr("No se encontró el ejecutable del juego en", "Game executable not found at"), game_dir.join(GAME_EXE).display()));
@@ -1315,7 +1331,8 @@ pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progre
     set_client_mods(vault_key, game_dir, o.client.clone(), progress);
     #[cfg(windows)]
     set_dxvk(vault_key, game_dir, o.dxvk, progress);
-    set_class_buttons(game_dir, &patches, o.class_buttons);
+    set_class_buttons(game_dir, &class_patches, o.class_buttons);
+    set_class_buttons(game_dir, &profile_patches, o.client.is_some());
     if !o.run {
         log("prepared, not started (--prepare-only)");
         return Ok(());
@@ -1438,15 +1455,18 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     std::thread::sleep(Duration::from_millis(500));
     progress(tr("Iniciando el juego...", "Launching the game..."), -1.0);
     let c = config();
-    let mut child = std::process::Command::new(game_dir.join(GAME_EXE))
-        .current_dir(game_dir)
+    let (hist_user, hist_token) = session.split_once('.').unwrap_or((session, ""));
+    let mut cmd = std::process::Command::new(game_dir.join(GAME_EXE));
+    cmd.current_dir(game_dir)
         .arg("/ForceDefaultSandbox=true")
         .arg(format!("/Sandbox={}", c.server))
         .arg(format!("/Port={}", c.port))
         .arg(format!("/OnlineAccessKey={}", c.access_key))
-        .arg(format!("/language={}", c.language))
-        .spawn()
-        .map_err(|e| {
+        .arg(format!("/language={}", c.language));
+    if !hist_user.is_empty() && !hist_token.is_empty() {
+        cmd.env("GRP_HISTORY_URL", base_url()).env("GRP_HISTORY_USER", hist_user).env("GRP_HISTORY_TOKEN", hist_token);
+    }
+    let mut child = cmd.spawn().map_err(|e| {
             log(&format!("game start failed: {}", e));
             format!("{}: {}", tr("No se pudo iniciar el juego", "Could not launch the game"), e)
         })?;
@@ -1490,8 +1510,9 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     let prefix = if c.prefix.is_empty() { share_dir().join("prefix") } else { PathBuf::from(&c.prefix) };
     let win = |p: &Path| format!("Z:{}", p.to_string_lossy().replace('/', "\\"));
     progress(tr("Iniciando el juego...", "Launching the game..."), -1.0);
-    let mut child = std::process::Command::new("umu-run")
-        .env("WINEPREFIX", &prefix)
+    let (hist_user, hist_token) = session.split_once('.').unwrap_or((session, ""));
+    let mut cmd = std::process::Command::new("umu-run");
+    cmd.env("WINEPREFIX", &prefix)
         .env("GAMEID", "umu-default")
         .env("PROTONPATH", &c.proton)
         // as on Windows: a version.dll in the game folder (ours, with client improvements on) wins over Wine's own
@@ -1500,9 +1521,11 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
         .arg("--session")
         .arg(session)
         .arg("--gamedir")
-        .arg(win(game_dir))
-        .spawn()
-        .map_err(|e| format!("{}: {}", tr("No se pudo ejecutar umu-run (¿está instalado?)", "Could not run umu-run (is it installed?)"), e))?;
+        .arg(win(game_dir));
+    if !hist_user.is_empty() && !hist_token.is_empty() {
+        cmd.env("GRP_HISTORY_URL", base_url()).env("GRP_HISTORY_USER", hist_user).env("GRP_HISTORY_TOKEN", hist_token);
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("{}: {}", tr("No se pudo ejecutar umu-run (¿está instalado?)", "Could not run umu-run (is it installed?)"), e))?;
     log(&format!("umu-run started, pid {}, prefix {}", child.id(), prefix.display()));
     progress(tr("En juego. Esta ventana volverá cuando cierres el juego.", "In game. This window will return when you close the game."), -1.0);
     playing();
@@ -1574,6 +1597,27 @@ mod tests {
         assert!(patched_equals(&file, "Yeti.big", &before, std::slice::from_ref(&p)));
         assert!(!patched_equals(&file, "Yeti.big", &"0".repeat(64), std::slice::from_ref(&p)));
         assert!(apply_slot(&file, &p, false));
+        assert_eq!(sha256_file(&file).unwrap(), before);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn multiple_non_overlapping_slots_validate_together() {
+        let (dir, p1) = slot_fixture("multi");
+        let file = dir.join("Yeti.big");
+        let data = std::fs::read(&file).unwrap();
+        let before = sha256_file(&file).unwrap();
+        let orig2 = data[2400..2560].to_vec();
+        let new2: Vec<u8> = orig2.iter().map(|b| b ^ 0xa5).collect();
+        let p2 = SlotPatch { path: "Yeti.big".into(), offset: 2400, len: 160, file_size: 4096, sha_orig: sha256_bytes(&orig2), sha_new: sha256_bytes(&new2), orig: orig2, new: new2 };
+        let both = [p1.clone(), p2.clone()];
+        assert!(apply_slot(&file, &p1, true));
+        assert!(patched_equals(&file, "Yeti.big", &before, &both));
+        assert!(apply_slot(&file, &p2, true));
+        assert!(patched_equals(&file, "Yeti.big", &before, &both));
+        assert!(apply_slot(&file, &p1, false));
+        assert!(patched_equals(&file, "Yeti.big", &before, &both));
+        assert!(apply_slot(&file, &p2, false));
         assert_eq!(sha256_file(&file).unwrap(), before);
         let _ = std::fs::remove_dir_all(&dir);
     }
