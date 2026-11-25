@@ -78,7 +78,7 @@ Tauri 2 application: the window is plain HTML/JS in `ui/`, and the backend logic
 
 ### Architecture
 
-- `core.rs`: settings, the account service (`POST /login`, `POST /register`, `POST /reset`, `POST /history`), self-update (`/launcher/version.txt`, `/launcher/GRPLauncher.exe`), the game folder check and download against the vault (`/files/<key>/manifest.txt`; the key comes back from sign-in), client improvements, resolution (`GraphicSettings.ini`), mouse sensitivity (`KeyMappingsPC.ini`), and starting the game with `/ForceDefaultSandbox=true /Sandbox=<server> /Port=<port> /OnlineAccessKey=<key>`.
+- `core.rs`: settings, the account service (`POST /login`, `POST /register` with `recovery=1`, `POST /reset` with an admin code or the recovery key, `POST /password`, `POST /recovery`, `POST /history`), self-update (`/launcher/version.txt`, `/launcher/GRPLauncher.exe`), the game folder check and download against the vault (`/files/<key>/manifest.txt`; the key comes back from sign-in), client improvements, resolution (`GraphicSettings.ini`), mouse sensitivity (`KeyMappingsPC.ini`), and starting the game with `/ForceDefaultSandbox=true /Sandbox=<server> /Port=<port> /OnlineAccessKey=<key>`.
 - `pipe.rs`: the game's launcher protocol on `\\.\pipe\Ghost_Recon_Phantoms`. The game signs in as `<name>.<session token>`.
 - `main.rs`: the Tauri commands for the window, and the headless CLI mode used in tests:
   `GRPLauncher.exe --user N --password P [--create] [--invite C] [--gamedir <folder>] [--nosync]`.
