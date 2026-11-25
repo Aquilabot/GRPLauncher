@@ -25,7 +25,7 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
 }
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 19;
+pub const VERSION: u32 = 20;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {

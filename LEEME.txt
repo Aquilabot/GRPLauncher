@@ -5,7 +5,9 @@ Para jugar Ghost Recon Phantoms en nuestro servidor. El launcher descarga el jue
 se actualiza solo.
 
 PRIMERA VEZ
-1. Descomprime esta carpeta donde quieras (por ejemplo en Documentos) y abre GRPLauncher.exe.
+1. Ejecuta GRPLauncher-Setup.exe (recomendado: instala el launcher en %LOCALAPPDATA%\GRPLauncher sin pedir
+   permisos de administrador, crea los accesos directos e instala WebView2 si falta). Si prefieres la versión
+   portable (.zip), descomprime toda la carpeta (por ejemplo en Documentos) y abre GRPLauncher.exe.
 2. Elige "Cuenta nueva" a la derecha, escribe tu nickname (3 a 16 letras, números, - o _) y una contraseña de 6
    caracteres o más.
 3. Pulsa CREAR CUENTA Y JUGAR. La primera vez descarga el juego (unos 4 GB) automáticamente.
@@ -27,9 +29,10 @@ El programa no está firmado todavía, así que Windows desconfía de él la pri
 No hace falta desactivar el antivirus entero; basta con la exclusión de esa carpeta.
 
 SI NO ABRE NINGUNA VENTANA
-El launcher usa "Microsoft Edge WebView2", que Windows 11 trae de serie y casi todos los Windows 10
-también. Si no lo tienes, instálalo desde la página de Microsoft (busca "WebView2 Runtime", el
-"Evergreen Bootstrapper") y vuelve a abrir el launcher.
+El launcher usa "Microsoft Edge WebView2", que Windows 11 trae de serie y casi todos los Windows 10 también.
+- Si instalas con GRPLauncher-Setup.exe, el instalador lo detecta y lo instala automáticamente si falta.
+- Si usas el .zip portable y falta WebView2, el launcher te avisa y ofrece abrir la descarga oficial de Microsoft
+  ("WebView2 Runtime", Evergreen Bootstrapper). Instálalo y vuelve a abrir el launcher.
 
 DIRECTX 9
 El juego necesita DirectX 9 (d3dx9_43.dll, XINPUT1_3.dll), que Windows 10 y 11 no traen. La primera vez que

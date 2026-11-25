@@ -27,5 +27,6 @@ person installing or operating it.
 The connection to the community server is encrypted (HTTPS) since version 4 of the launcher. The game itself
 talks to the game server over its own protocol (UDP), as the original game did.
 
-Changes it makes to your system: none outside its own folder and the game folder you choose. To remove it, delete
-those folders; there is no installer and nothing is written to the registry.
+Changes it makes to your system:
+- **Portable zip (`GRPLauncher.zip`):** none outside its own folder, `%APPDATA%\GRPLauncher`, and the game folder you choose. To remove it, delete those folders; nothing is written to the registry.
+- **Windows installer (`GRPLauncher-Setup.exe`):** installs per-user into `%LOCALAPPDATA%\GRPLauncher`, creates Start Menu and optional Desktop shortcuts, and writes a standard per-user Add/Remove Programs entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\GRPLauncher`. If Microsoft Edge WebView2 Runtime is missing, the installer runs Microsoft's official Evergreen WebView2 Bootstrapper to install it. Uninstalling removes the launcher, its shortcuts, and that registry entry while keeping your game folder and settings intact.

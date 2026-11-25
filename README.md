@@ -20,9 +20,10 @@
 
 ## Quick start
 
-1. Download **`GRPLauncher.zip`** from the [latest GitHub release](https://github.com/Aquilabot/GRPLauncher/releases/latest).
-2. Extract the entire folder anywhere on your PC (do not run it from inside the `.zip`).
-3. Open **`GRPLauncher.exe`**, pick **New account** (the launcher is in Spanish and English: **ES / EN**, top right), choose a nickname and password, and click **CREATE ACCOUNT AND PLAY**.
+1. Download **`GRPLauncher-Setup.exe`** (recommended) from the [latest GitHub release](https://github.com/Aquilabot/GRPLauncher/releases/latest) and run it.
+   - Installs per-user into `%LOCALAPPDATA%\GRPLauncher` (no administrator rights needed), creates shortcuts, and installs Microsoft Edge WebView2 Runtime automatically if missing.
+   - Prefer portable? Download **`GRPLauncher.zip`**, extract the entire folder anywhere on your PC (do not run it from inside the `.zip`), and open **`GRPLauncher.exe`**.
+2. Open **GRP Launcher**, pick **New account** (the launcher is in Spanish and English: **ES / EN**, top right), choose a nickname and password, and click **CREATE ACCOUNT AND PLAY**.
    - Registration is free — no invitation code required.
    - On first launch, the launcher downloads the game (~4 GB) and installs DirectX 9 if missing.
    - Future updates to both the launcher and the game happen automatically.
@@ -43,7 +44,7 @@
   - Exact mouse sensitivity input with a built-in converter from **cm/360° + DPI** or other shooters (*The Finals, CS2, Apex Legends, Valorant, Overwatch 2, Call of Duty, Fortnite, Rainbow Six Siege*).
 - **Vulkan rendering via DXVK** *(Windows, optional, enabled by default)*: runs the game through DXVK 3.1.1 after checking for Vulkan 1.3 support, with automatic fallback to DirectX 9 if your GPU or driver does not support it.
 - **Native Linux support:** Builds natively with Tauri 2 and launches the game through `umu-run` / Proton.
-- **Portable and private:** No installer, no registry entries, no telemetry or ads ([`PRIVACY.md`](PRIVACY.md)), encrypted HTTPS authentication, and automatic self-updates.
+- **Simple and private:** Per-user Windows installer (with automatic WebView2 setup and clean uninstall that keeps the game folder) or zero-registry portable `.zip`, no telemetry or ads ([`PRIVACY.md`](PRIVACY.md)), encrypted HTTPS authentication, and automatic self-updates.
 
 ---
 
@@ -90,9 +91,9 @@ The program's version resource names the publisher and copyright (`bundle` in `t
 
 ### Building
 
-- **Windows (cross-compiled from Linux):** `./build.sh` (uses `cargo-xwin`); `./build.sh publish` also uploads it to the server, and every installed launcher replaces itself on its next start. Raise `VERSION` in `src-tauri/src/core.rs` for each release.
-- **GitHub Releases:** pushing a semver tag (`X.Y.Z`) triggers `.github/workflows/release.yml` on `windows-latest`, builds `GRPLauncher.exe`, packages `GRPLauncher.zip`, and publishes the GitHub Release automatically.
-- **Windows runtime requirements:** the window needs the WebView2 runtime (part of Windows 11 and most Windows 10). The game needs the 32-bit DirectX 9 runtime of June 2010 (`d3dx9_43.dll`, `xinput1_3.dll`), which Windows 10 and 11 lack. Before starting the game, when either DLL is missing from `SysWOW64` (`System32` on 32-bit Windows), the launcher runs `DXRedist\DXSETUP.exe /silent` from the game folder elevated (one UAC prompt) and waits; a declined prompt or a failed setup stops there with instructions. `GRP_DX_CHECK=<folder>` looks for the DLLs in that folder instead (an empty one forces the install, for tests). Wine prefixes carry their own copies, so under Wine nothing runs. DXSETUP probes for .NET to decide about Managed DirectX, which makes Windows offer .NET Framework 3.5; the game does not need it.
+- **Windows (cross-compiled from Linux):** `./build.sh` (uses `cargo-xwin`, and builds `GRPLauncher-Setup.exe` when `makensis` or `MAKENSIS` is set); `./build.sh publish` also uploads the artifacts to the server, and every installed launcher replaces itself on its next start. Raise `VERSION` in `src-tauri/src/core.rs` for each release.
+- **GitHub Releases:** pushing a semver tag (`X.Y.Z`) triggers `.github/workflows/release.yml` on `windows-latest`, builds `GRPLauncher.exe`, verifies Microsoft's official WebView2 Evergreen Bootstrapper signature, builds `GRPLauncher-Setup.exe` with NSIS (`installer/grplauncher.nsi`), packages `GRPLauncher.zip`, and publishes the GitHub Release automatically.
+- **Windows runtime requirements:** the window needs the WebView2 runtime (part of Windows 11 and most Windows 10). `GRPLauncher-Setup.exe` checks the official WebView2 registry keys and runs Microsoft's Evergreen Bootstrapper automatically if missing; when using the portable `.zip` without WebView2, `GRPLauncher.exe` detects the missing runtime before opening the window and offers to open Microsoft's download (`GRP_WEBVIEW2_CHECK=present|missing` overrides the check for tests). The game needs the 32-bit DirectX 9 runtime of June 2010 (`d3dx9_43.dll`, `xinput1_3.dll`), which Windows 10 and 11 lack. Before starting the game, when either DLL is missing from `SysWOW64` (`System32` on 32-bit Windows), the launcher runs `DXRedist\DXSETUP.exe /silent` from the game folder elevated (one UAC prompt) and waits; a declined prompt or a failed setup stops there with instructions. `GRP_DX_CHECK=<folder>` looks for the DLLs in that folder instead (an empty one forces the install, for tests). Wine prefixes carry their own copies, so under Wine nothing runs. DXSETUP probes for .NET to decide about Managed DirectX, which makes Windows offer .NET Framework 3.5; the game does not need it.
 - **Linux:** `cargo build --release` in `src-tauri/` gives a native launcher (needs `webkit2gtk-4.1` and `umu-run`). It signs in and prepares the game folder itself, then runs the game inside Wine through `umu-run`, with the Windows build (fetched from the server) as the helper that answers the game's pipe (`--session`). `launcher.ini` takes two more keys there: `prefix` (Wine prefix) and `proton` (`PROTONPATH`). Settings and log go to `~/.config/GRPLauncher`, the game to `~/.local/share/GRPLauncher`.
 
 ### Client improvements

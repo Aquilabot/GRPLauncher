@@ -24,6 +24,29 @@ jobs:
           cp src-tauri/target/release/GRPLauncher.exe launcher.ini LEEME.txt LICENSE dist/
           version="$(grep -oP 'pub const VERSION: u32 = \K[0-9]+' src-tauri/src/core.rs)"
           printf '%s %s\n' "$version" "$(sha256sum dist/GRPLauncher.exe | cut -d' ' -f1)" > dist/version.txt
+      - name: Download and verify WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          $out = "dist/MicrosoftEdgeWebview2Setup.exe"
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $out -UseBasicParsing
+          $sig = Get-AuthenticodeSignature -FilePath $out
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation') {
+            throw "Unexpected WebView2 bootstrapper signature: $($sig.Status) / $($sig.SignerCertificate.Subject)"
+          }
+      - name: Build NSIS installer
+        shell: bash
+        run: |
+          semver="$(grep -oP '^version = "\K[^"]+' src-tauri/Cargo.toml)"
+          makensis \
+            -NOCD \
+            -INPUTCHARSET UTF8 \
+            -DAPP_VERSION="$semver" \
+            -DDIST_DIR=dist \
+            -DICON_FILE=src-tauri/icons/icon.ico \
+            -DWEBVIEW2_BOOTSTRAPPER=MicrosoftEdgeWebview2Setup.exe \
+            -DOUT_FILE=dist/GRPLauncher-Setup.exe \
+            installer/grplauncher.nsi
+          rm -f dist/MicrosoftEdgeWebview2Setup.exe
       - uses: actions/upload-artifact@v4
         id: unsigned
         with:
@@ -31,6 +54,8 @@ jobs:
           path: dist/
       # Code signing (SignPath Foundation), enabled once the project is accepted: the signing request is made for
       # the artifact built above from this commit, and each release is approved by hand in SignPath.
+      # Once active, sign GRPLauncher.exe first, then run makensis to pack the signed exe into GRPLauncher-Setup.exe
+      # and sign the installer too.
       # - uses: signpath/github-action-submit-signing-request@v1
       #   with:
       #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -72,6 +97,9 @@ jobs:
           cat > release-notes.md <<EOF
           ${summary}
 
+          - **Installer (recommended):** \`GRPLauncher-Setup.exe\` installs per-user into \`%LOCALAPPDATA%\GRPLauncher\`, creates shortcuts, and installs Microsoft Edge WebView2 Runtime if missing.
+          - **Portable:** \`GRPLauncher.zip\` (extract to a folder and run \`GRPLauncher.exe\`).
+
           Installed launchers update themselves on their next start.
 
           Windows build made by the release workflow of this repository (run ${RUN_ID}) from the tag ${TAG}, not signed yet: SmartScreen and antivirus products warn on first run (LEEME.txt explains what to do).
@@ -79,10 +107,10 @@ jobs:
           Code signing policy: see the [README](https://github.com/${REPO}#code-signing-policy). Planned: free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). Privacy policy: [PRIVACY.md](https://github.com/${REPO}/blob/master/PRIVACY.md).
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/GRPLauncher.exe dist/GRPLauncher.zip --clobber
+            gh release upload "$TAG" dist/GRPLauncher-Setup.exe dist/GRPLauncher.zip dist/GRPLauncher.exe --clobber
             gh release edit "$TAG" --title "GRPLauncher $TAG" --notes-file release-notes.md
           else
-            gh release create "$TAG" dist/GRPLauncher.exe dist/GRPLauncher.zip \
+            gh release create "$TAG" dist/GRPLauncher-Setup.exe dist/GRPLauncher.zip dist/GRPLauncher.exe \
               --title "GRPLauncher $TAG" \
               --notes-file release-notes.md
           fi

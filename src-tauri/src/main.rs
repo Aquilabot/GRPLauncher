@@ -292,6 +292,96 @@ fn inside_temp_folder() -> bool {
     }
 }
 
+/// Official WebView2 Runtime version strings ("pv") are non-empty and not "0.0.0.0".
+fn is_valid_webview2_version(v: &str) -> bool {
+    let t = v.trim();
+    !t.is_empty() && t != "0.0.0.0"
+}
+
+#[cfg(windows)]
+fn read_reg_sz(root: windows_sys::Win32::System::Registry::HKEY, subkey: &str, value_name: &str, flags: u32) -> Option<String> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, REG_SZ, REG_VALUE_TYPE};
+    let sub: Vec<u16> = subkey.encode_utf16().chain(Some(0)).collect();
+    let val: Vec<u16> = value_name.encode_utf16().chain(Some(0)).collect();
+    let mut hkey: HKEY = std::ptr::null_mut();
+    let status = unsafe { RegOpenKeyExW(root, sub.as_ptr(), 0, flags, &mut hkey) };
+    if status != ERROR_SUCCESS {
+        return None;
+    }
+    let mut ty: REG_VALUE_TYPE = 0;
+    let mut bytes: u32 = 0;
+    let query_len = unsafe { RegQueryValueExW(hkey, val.as_ptr(), std::ptr::null(), &mut ty, std::ptr::null_mut(), &mut bytes) };
+    if query_len != ERROR_SUCCESS || ty != REG_SZ || bytes < 2 {
+        unsafe { RegCloseKey(hkey) };
+        return None;
+    }
+    let mut buf = vec![0u16; (bytes as usize + 1) / 2];
+    let query_val = unsafe { RegQueryValueExW(hkey, val.as_ptr(), std::ptr::null(), &mut ty, buf.as_mut_ptr() as *mut u8, &mut bytes) };
+    unsafe { RegCloseKey(hkey) };
+    if query_val != ERROR_SUCCESS || ty != REG_SZ {
+        return None;
+    }
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    Some(String::from_utf16_lossy(&buf[..end]))
+}
+
+/// Checks whether Microsoft Edge WebView2 Runtime is installed (per-machine or per-user), matching WebView2Loader.
+/// GRP_WEBVIEW2_CHECK=present|missing overrides the check for tests.
+#[cfg(windows)]
+fn webview2_installed() -> bool {
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY};
+    if let Ok(v) = std::env::var("GRP_WEBVIEW2_CHECK") {
+        match v.trim().to_ascii_lowercase().as_str() {
+            "present" => return true,
+            "missing" => return false,
+            _ => {}
+        }
+    }
+    if let Ok(folder) = std::env::var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER") {
+        if !folder.trim().is_empty() && std::path::Path::new(folder.trim()).is_dir() {
+            return true;
+        }
+    }
+    const CLIENT_KEY: &str = r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+    const USER_KEY: &str = r"Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+    let probes = [
+        (HKEY_LOCAL_MACHINE, CLIENT_KEY, KEY_READ | KEY_WOW64_32KEY),
+        (HKEY_LOCAL_MACHINE, CLIENT_KEY, KEY_READ | KEY_WOW64_64KEY),
+        (HKEY_CURRENT_USER, USER_KEY, KEY_READ),
+    ];
+    probes.into_iter().any(|(root, key, flags)| read_reg_sz(root, key, "pv", flags).is_some_and(|v| is_valid_webview2_version(&v)))
+}
+
+#[cfg(windows)]
+fn show_missing_webview2_dialog() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, IDYES, MB_ICONWARNING, MB_YESNO};
+    const WEBVIEW2_URL: &str = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+    let text: Vec<u16> = "Falta Microsoft Edge WebView2 Runtime en este equipo, por lo que no se puede abrir la ventana de GRP Launcher.\n\nUsa el instalador GRPLauncher-Setup.exe (lo instala automáticamente) o pulsa Sí para descargar Microsoft Edge WebView2 Runtime ahora.\n\nMicrosoft Edge WebView2 Runtime is missing on this PC, so the GRP Launcher window cannot open.\n\nUse the GRPLauncher-Setup.exe installer (it installs WebView2 automatically) or click Yes to download Microsoft Edge WebView2 Runtime now."
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    let title: Vec<u16> = "GRP Launcher".encode_utf16().chain(Some(0)).collect();
+    let res = unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_YESNO | MB_ICONWARNING) };
+    if res == IDYES {
+        let _ = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", WEBVIEW2_URL]).spawn();
+    }
+}
+
+#[cfg(windows)]
+fn show_startup_error_dialog(err: &str) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let text: Vec<u16> = format!(
+        "No se pudo abrir GRP Launcher:\n{}\n\nCould not open GRP Launcher:\n{}",
+        err, err
+    )
+    .encode_utf16()
+    .chain(Some(0))
+    .collect();
+    let title: Vec<u16> = "GRP Launcher".encode_utf16().chain(Some(0)).collect();
+    unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR) };
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Before anything else: this is a child of the launcher that only answers one question (see core::vulkan_ready).
@@ -379,9 +469,38 @@ fn main() {
         return;
     }
     core::set_english(core::settings().get("lang").map(String::as_str) == Some("en"));
-    tauri::Builder::default()
+    #[cfg(windows)]
+    if !webview2_installed() {
+        core::log("WebView2 Runtime not found in registry; asked the user to install it");
+        show_missing_webview2_dialog();
+        return;
+    }
+    if let Err(e) = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, play, pick_folder, reset_password])
         .run(tauri::generate_context!())
-        .expect("error while running the launcher");
+    {
+        let msg = e.to_string();
+        core::log(&format!("launcher window failed to start: {}", msg));
+        #[cfg(windows)]
+        show_startup_error_dialog(&msg);
+        #[cfg(not(windows))]
+        eprintln!("error while running the launcher: {}", msg);
+        std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_webview2_version;
+
+    #[test]
+    fn recognizes_valid_webview2_versions() {
+        assert!(is_valid_webview2_version("131.0.2903.112"));
+        assert!(is_valid_webview2_version(" 120.0.2210.91 "));
+        assert!(!is_valid_webview2_version(""));
+        assert!(!is_valid_webview2_version("   "));
+        assert!(!is_valid_webview2_version("0.0.0.0"));
+        assert!(!is_valid_webview2_version(" 0.0.0.0 "));
+    }
 }
