@@ -36,8 +36,16 @@ jobs:
       - name: Build NSIS installer
         shell: bash
         run: |
+          makensis_bin="$(command -v makensis || true)"
+          if [ -z "$makensis_bin" ] && [ -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then
+            makensis_bin="/c/Program Files (x86)/NSIS/makensis.exe"
+          fi
+          if [ -z "$makensis_bin" ]; then
+            choco install -y nsis --no-progress
+            makensis_bin="/c/Program Files (x86)/NSIS/makensis.exe"
+          fi
           semver="$(grep -oP '^version = "\K[^"]+' src-tauri/Cargo.toml)"
-          makensis \
+          "$makensis_bin" \
             -NOCD \
             -INPUTCHARSET UTF8 \
             -DAPP_VERSION="$semver" \
