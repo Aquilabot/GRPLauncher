@@ -25,7 +25,7 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
 }
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 21;
+pub const VERSION: u32 = 22;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -1488,6 +1488,17 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     if !hist_user.is_empty() && !hist_token.is_empty() {
         cmd.env("GRP_HISTORY_URL", base_url()).env("GRP_HISTORY_USER", hist_user).env("GRP_HISTORY_TOKEN", hist_token);
     }
+    // The game sends to the match server from UDP port 3074 when that port is free, and from another one when it is
+    // taken. Two players whose games both came from 3074 could not be in one match: the second left at the start
+    // with "Lost connection to game server" 97D60006 (26-nov, every case on the server; the only player that never
+    // failed came from another port). Holding 3074 here while the game runs makes it take another port.
+    // GRP_KEEP_3074 set: not held, as before.
+    let _port_hold = if std::env::var_os("GRP_KEEP_3074").is_some() { None } else {
+        match std::net::UdpSocket::bind(("0.0.0.0", 3074)) {
+            Ok(sock) => { log("UDP 3074 held while the game runs: it takes another port"); Some(sock) }
+            Err(e) => { log(&format!("UDP 3074 not held ({}): the game takes what it finds", e)); None }
+        }
+    };
     let mut child = cmd.spawn().map_err(|e| {
             log(&format!("game start failed: {}", e));
             format!("{}: {}", tr("No se pudo iniciar el juego", "Could not launch the game"), e)
