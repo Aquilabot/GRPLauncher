@@ -24,8 +24,8 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
     if english() { en } else { es }
 }
 
-/// Of this launcher; the server tells when there is a newer one (/launcher/version.txt) and may refuse older ones.
-pub const VERSION: u32 = 22;
+/// Of this launcher; the server tells when there is a newer one (/launcher/version.txt or /launcher/version-linux.txt) and may refuse older ones.
+pub const VERSION: u32 = 23;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -418,20 +418,26 @@ fn download(url: &str, file: &Path, size: u64, sha: &str, progress: &mut dyn FnM
     Err(format!("{} {}: {}", tr("No se pudo descargar", "Could not download"), file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), last))
 }
 
-/// Replaces this program when the server has a newer one, and starts it again. /launcher/version.txt holds
-/// "<number> <sha256 of GRPLauncher.exe>". Returns true when the new one was started (the caller exits).
+/// Replaces this program when the server has a newer one, and starts it again. /launcher/version.txt (Windows) or
+/// /launcher/version-linux.txt (Linux) holds "<number> <sha256>". Returns true when the new one was started (the caller exits).
 pub fn self_update(args: &[String]) -> bool {
-    if cfg!(not(windows)) {
-        return false; // the server publishes the Windows program; a Linux build is updated by hand
-    }
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(_) => return false,
     };
+    let (ver_file, bin_file) = if cfg!(windows) {
+        ("version.txt", "GRPLauncher.exe")
+    } else {
+        ("version-linux.txt", "GRPLauncher-linux")
+    };
+    self_update_at(&base_url(), &exe, VERSION, ver_file, bin_file, args)
+}
+
+fn self_update_at(base: &str, exe: &Path, current_version: u32, ver_file: &str, bin_file: &str, args: &[String]) -> bool {
     let old = PathBuf::from(format!("{}.old", exe.display()));
     let fresh = PathBuf::from(format!("{}.new", exe.display()));
     let _ = std::fs::remove_file(&old);
-    let text = match get_text(&format!("{}/launcher/version.txt", base_url()), 6) {
+    let text = match get_text(&format!("{}/launcher/{}", base, ver_file), 6) {
         Ok(t) => t,
         Err(e) => {
             log(&format!("launcher update check failed: {}", e));
@@ -440,12 +446,12 @@ pub fn self_update(args: &[String]) -> bool {
     };
     let v: Vec<&str> = text.split_whitespace().collect();
     let n: u32 = v.first().and_then(|x| x.parse().ok()).unwrap_or(0);
-    if v.len() < 2 || n <= VERSION {
+    if v.len() < 2 || n <= current_version {
         return false;
     }
-    log(&format!("launcher {} available (this is {})", n, VERSION));
+    log(&format!("launcher {} available (this is {})", n, current_version));
     let r = (|| -> Result<(), String> {
-        let resp = ureq::get(&format!("{}/launcher/GRPLauncher.exe", base_url())).timeout(Duration::from_secs(120)).call().map_err(|e| e.to_string())?;
+        let resp = ureq::get(&format!("{}/launcher/{}", base, bin_file)).timeout(Duration::from_secs(120)).call().map_err(|e| e.to_string())?;
         let mut f = std::fs::File::create(&fresh).map_err(|e| e.to_string())?;
         std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| e.to_string())?;
         drop(f);
@@ -453,9 +459,17 @@ pub fn self_update(args: &[String]) -> bool {
             let _ = std::fs::remove_file(&fresh);
             return Err("wrong hash, kept the current one".into());
         }
-        std::fs::rename(&exe, &old).map_err(|e| e.to_string())?; // a running program can be renamed, not overwritten
-        std::fs::rename(&fresh, &exe).map_err(|e| e.to_string())?;
-        std::process::Command::new(&exe).args(args).spawn().map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&fresh, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        }
+        std::fs::rename(exe, &old).map_err(|e| e.to_string())?; // a running program can be renamed, not overwritten
+        if let Err(e) = std::fs::rename(&fresh, exe) {
+            let _ = std::fs::rename(&old, exe);
+            return Err(e.to_string());
+        }
+        std::process::Command::new(exe).args(args).spawn().map_err(|e| e.to_string())?;
         Ok(())
     })();
     match r {
@@ -1769,5 +1783,73 @@ mod tests {
             patch_mouse_sensitivity(no_section, 0.5),
             "[Button Mappings 0]\r\nMove Forward=Key_W\r\n[Parameter]\r\nMouseSensitivity=0.500000\r\n"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn self_update_replaces_and_runs_linux_binary() {
+        use std::net::TcpListener;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("grp-self-update-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("GRPLauncher");
+        let marker = dir.join("ran.txt");
+        std::fs::write(&exe, b"#!/bin/sh\necho old\n").unwrap();
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let payload = format!("#!/bin/sh\nprintf '%s' \"$1\" > \"{}\"\n", marker.display()).into_bytes();
+        let good_sha = hex::encode(Sha256::digest(&payload));
+
+        let serve = |ver_body: String, bin_body: Vec<u8>, requests: usize| -> (String, std::thread::JoinHandle<()>) {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let base = format!("http://{}", listener.local_addr().unwrap());
+            let handle = std::thread::spawn(move || {
+                for _ in 0..requests {
+                    let (mut stream, _) = listener.accept().unwrap();
+                    let mut req = [0u8; 1024];
+                    let n = stream.read(&mut req).unwrap_or(0);
+                    let line = String::from_utf8_lossy(&req[..n]);
+                    let body: &[u8] = if line.starts_with("GET /launcher/version-linux.txt") {
+                        ver_body.as_bytes()
+                    } else {
+                        &bin_body
+                    };
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(body);
+                }
+            });
+            (base, handle)
+        };
+
+        // 1. Same version -> no update
+        let (base, h) = serve(format!("22 {}\n", good_sha), payload.clone(), 1);
+        assert!(!self_update_at(&base, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]));
+        h.join().unwrap();
+
+        // 2. Bad hash -> rejected, original file kept, .new removed
+        let (base, h) = serve("23 deadbeef\n".into(), payload.clone(), 2);
+        assert!(!self_update_at(&base, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]));
+        h.join().unwrap();
+        assert_eq!(std::fs::read(&exe).unwrap(), b"#!/bin/sh\necho old\n");
+        assert!(!dir.join("GRPLauncher.new").exists());
+
+        // 3. Valid newer version -> downloads, sets +x, swaps exe/.old, and spawns with args
+        let (base, h) = serve(format!("23 {}\n", good_sha), payload.clone(), 2);
+        assert!(self_update_at(&base, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &["updated-ok".into()]));
+        h.join().unwrap();
+        assert_eq!(std::fs::read(&exe).unwrap(), payload);
+        assert_eq!(std::fs::read(dir.join("GRPLauncher.old")).unwrap(), b"#!/bin/sh\necho old\n");
+        assert_ne!(std::fs::metadata(&exe).unwrap().permissions().mode() & 0o111, 0);
+        for _ in 0..40 {
+            if marker.exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "updated-ok");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
