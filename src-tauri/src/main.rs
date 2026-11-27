@@ -4,6 +4,8 @@
 //
 //   GRPLauncher.exe                                   the window
 //   GRPLauncher.exe --user N --password P [--create] [--invite C] [--gamedir <folder>] [--nosync]   no window (tests)
+//                   [--remember]: keep the session (as the window's "Mantener la sesión iniciada"); no --password:
+//                   the kept session; --user N --signout: end it
 //   GRPLauncher.exe --user N --password P --reset <code>   sets the new password P with an admin's code, no window (tests)
 //   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
 //   GRPLauncher.exe --vulkan-check                    prints "ok <device>" or "no <why>": can DXVK run here (Windows)
@@ -41,6 +43,8 @@ struct State {
     classbuttons: bool,
     server: String,
     lang: String,       // "es", "en", or empty the first time: the window picks by the system's language
+    remember: bool,     // "Mantener la sesión iniciada" (on unless the player turned it off)
+    keptname: String,   // the account this launcher keeps signed in; empty: none
 }
 
 struct SavedClientMods {
@@ -100,6 +104,8 @@ fn get_state() -> State {
         classbuttons: saved_class_buttons(&s),
         server: core::config().server.clone(),
         lang: s.get("lang").cloned().unwrap_or_default(),
+        remember: s.get("remember").map(|v| v != "0").unwrap_or(true),
+        keptname: core::kept_name().unwrap_or_default(),
     }
 }
 
@@ -133,6 +139,8 @@ fn open_link(which: String) {
 struct PlayArgs {
     name: String,
     password: String,
+    #[serde(default = "yes")]
+    remember: bool,
     #[serde(default)]
     create: bool,
     invite: Option<String>,
@@ -198,6 +206,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             ("sidebutton2", core::parse_side_key(&args.sidebutton2)),
             ("dxvk", if args.dxvk { "1" } else { "0" }.to_string()),
             ("classbuttons", if args.classbuttons { "1" } else { "0" }.to_string()),
+            ("remember", if args.remember { "1" } else { "0" }.to_string()),
         ]);
         let progress_app = app.clone();
         let progress = move |text: &str, fraction: f64| {
@@ -222,7 +231,7 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult, [&args.sidebutton1, &args.sidebutton2]);
             let mouse_sens = core::parse_mouse_sens(&args.mousesens);
             let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, mouse_sens, client, dxvk: args.dxvk, class_buttons: args.classbuttons, run: true };
-            error = core::play(&args.name, &args.password, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
+            error = core::play(&args.name, &args.password, args.remember, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
             })
             .err();
@@ -273,6 +282,12 @@ struct Notes {
 #[tauri::command(async)]
 fn get_notes() -> Notes {
     Notes { notes: notes::fetch(), seen: core::settings().get("notesseen").and_then(|v| v.parse().ok()).unwrap_or(0) }
+}
+
+// "Cerrar sesión": this launcher no longer keeps the account signed in. Off the window's thread: it tells the server.
+#[tauri::command(async)]
+fn sign_out() {
+    core::sign_out();
 }
 
 // Match history from POST /history (cached session token or password secret). Off the window's thread.
@@ -440,6 +455,10 @@ fn main() {
     }
     if let Some(name) = arg(&args, "--user") {
         let pw = arg(&args, "--password").unwrap_or_default();
+        if args.iter().any(|a| a == "--signout") {
+            core::sign_out();
+            return;
+        }
         if let Some(code) = arg(&args, "--reset") {
             let r = core::reset_password(&name, &code, &pw);
             core::log(&format!("password reset {}: {}", name, r));
@@ -473,6 +492,7 @@ fn main() {
         let r = core::play(
             &name,
             &pw,
+            args.iter().any(|a| a == "--remember"),
             &dir,
             &opts,
             &|text, _| {
@@ -499,7 +519,7 @@ fn main() {
     }
     if let Err(e) = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, play, pick_folder, reset_password, change_password, new_recovery_key])
+        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, sign_out, play, pick_folder, reset_password, change_password, new_recovery_key])
         .run(tauri::generate_context!())
     {
         let msg = e.to_string();

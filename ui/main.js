@@ -3,7 +3,7 @@
 // events and draws the two diagrams (the terrain of the home view, the view cone of the settings).
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', sidebutton1: '', sidebutton2: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '' };
+const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', sidebutton1: '', sidebutton2: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '', remember: true, keptname: '' };
 // Outside the launcher (the page opened in a browser, to look at it): the state above and three notes of the real log.
 const PREVIEW_NOTES = { seen: 25, notes: [
   { id: 26, date: '2026-11-23', tag: 'servidor', title: 'Bots más naturales', items: ['Los bots se mueven más como un jugador: corren y esprintan a velocidad de jugador, trepan y caen en vez de cambiar de altura de golpe.', 'Ya no se meten dentro de los muros ni se quedan quietos cuando les disparan.'] },
@@ -65,6 +65,7 @@ const TEXT = {
     'set.maxfps': 'Límite de FPS', 'fps.auto': 'Automático (Hz del monitor)', 'fps.none': 'Sin límite',
     'set.ads': 'Sensibilidad al apuntar', 'set.focal': 'Escalar por distancia focal', 'set.focal.hint': 'Mantiene una sensación de puntería consistente al hacer zoom, en lugar de la curva original del juego.', 'set.adsmult': 'Multiplicador con mira (ADS)', 'set.scopemult': 'Multiplicador con telescópica',
     'set.side': 'Botones laterales del ratón', 'set.side.hint': 'El juego no reconoce los botones laterales. Elige la tecla que pulsa cada uno y asigna esa tecla a la acción en las opciones del juego.', 'set.side1': 'Botón lateral 1 (atrás)', 'set.side2': 'Botón lateral 2 (adelante)', 'side.none': 'Ninguna', 'side.pgup': 'Re Pág', 'side.pgdn': 'Av Pág', 'side.numpad': 'Teclado numérico {n}',
+    'acc.remember': 'Mantener la sesión iniciada (30 días)', 'acc.signout': 'Cerrar sesión', 'acc.kept': 'Sesión guardada', 'msg.signedout': 'Sesión cerrada en este equipo.',
     'acc.label': 'Cuenta', 'acc.login': 'Entrar', 'acc.create': 'Cuenta nueva', 'acc.name': 'Nickname', 'acc.password': 'Contraseña',
     'acc.create.hint': 'Gratis y sin correo. Contraseña de al menos 6 caracteres.', 'acc.forgot': '¿Olvidaste tu contraseña?', 'acc.manage': 'Cambiar contraseña o clave de recuperación', 'acc.invite': 'Código de invitación',
     'play': 'Jugar', 'play.create': 'Crear cuenta y jugar',
@@ -111,6 +112,7 @@ const TEXT = {
     'set.maxfps': 'FPS limit', 'fps.auto': 'Auto (monitor refresh rate)', 'fps.none': 'Uncapped',
     'set.ads': 'Aim sensitivity', 'set.focal': 'Scale by focal length', 'set.focal.hint': 'Keeps aiming feel consistent across zoom levels instead of using the game’s default curve.', 'set.adsmult': 'ADS multiplier', 'set.scopemult': 'Scope multiplier',
     'set.side': 'Mouse side buttons', 'set.side.hint': 'The game does not see the side buttons. Pick the key each one presses, then bind that key to the action in the game’s options.', 'set.side1': 'Side button 1 (back)', 'set.side2': 'Side button 2 (forward)', 'side.none': 'None', 'side.pgup': 'Page Up', 'side.pgdn': 'Page Down', 'side.numpad': 'Numpad {n}',
+    'acc.remember': 'Keep me signed in (30 days)', 'acc.signout': 'Sign out', 'acc.kept': 'Signed in', 'msg.signedout': 'Signed out on this computer.',
     'acc.label': 'Account', 'acc.login': 'Sign in', 'acc.create': 'New account', 'acc.name': 'Nickname', 'acc.password': 'Password',
     'acc.create.hint': 'Free, no email required. Password must be at least 6 characters.', 'acc.forgot': 'Forgot your password?', 'acc.manage': 'Change password or recovery key', 'acc.invite': 'Invitation code',
     'play': 'Play', 'play.create': 'Create account and play',
@@ -421,7 +423,7 @@ function setStatus(text, fraction, kind) {
 function setBusy(busy) {
   if (busy) $('app').dataset.busy = ''; else delete $('app').dataset.busy;
   $('play').disabled = busy;
-  for (const id of ['name', 'password', 'forgot', 'account', 'invite', 'create', 'modeLogin', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods', 'classbuttons']) $(id).disabled = busy;
+  for (const id of ['name', 'password', 'remember', 'signOut', 'forgot', 'account', 'invite', 'create', 'modeLogin', 'gamedir', 'browse', 'resolution', 'windowed', 'mousesens', 'sensToggle', 'sensFrom', 'sensInput', 'sensDpi', 'clientmods', 'classbuttons']) $(id).disabled = busy;
   $('sensApply').disabled = busy || sensComputed === null;
   syncClientMods(busy);
   $('dxvk').disabled = busy || LINUX;
@@ -434,7 +436,31 @@ function syncMode() {
   $('createHint').hidden = !creating;
   $('forgot').hidden = creating;
   $('account').hidden = creating;
+  syncKept();
 }
+
+// "Mantener la sesión iniciada": with a kept session for the name typed, Play needs no password.
+let keptName = '';
+function keeps() {
+  return !!keptName && !$('create').checked && $('name').value.trim().toLowerCase() === keptName.toLowerCase();
+}
+function syncKept() {
+  const on = keeps();
+  $('password').placeholder = on ? t('acc.kept') : '';
+  $('signOut').hidden = !on;
+}
+$('name').addEventListener('input', syncKept);
+fresh.push(syncKept);
+$('signOut').addEventListener('click', async () => {
+  setBusy(true);
+  await invoke('sign_out').catch(() => {});
+  keptName = '';
+  setBusy(false);
+  syncKept();
+  histDirty = true;
+  setStatus(t('msg.signedout'));
+  $('password').focus();
+});
 for (const id of ['create', 'modeLogin']) $(id).addEventListener('change', () => {
   $('inviteRow').hidden = true;
   $('invite').value = '';
@@ -560,14 +586,14 @@ $('browse').addEventListener('click', async () => {
 $('form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const name = $('name').value.trim(), password = $('password').value, creating = $('create').checked, invite = $('invite').value.trim();
-  if (!name || !password) return setStatus(t('msg.need'), -1, 'fault');
+  if (!name || (!password && !keeps())) return setStatus(t('msg.need'), -1, 'fault');
   if (creating && password.length < 6) return setStatus(t('msg.short'), -1, 'fault');
   if (creating && !$('inviteRow').hidden && !invite) return setStatus(t('msg.invite'), -1, 'fault');
   const res = $('resolution').value;
   const [w, h] = res === 'auto' ? [screenW, screenH] : res.split('x').map(Number);
   setBusy(true);
   setStatus(t('msg.connecting'));
-  await invoke('play', { args: { name, password, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: fovValue(), focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), sidebutton1: $('sidebutton1').value, sidebutton2: $('sidebutton2').value, dxvk: $('dxvk').checked, classbuttons: $('classbuttons').checked } });
+  await invoke('play', { args: { name, password, remember: $('remember').checked, create: creating, invite: creating && invite ? invite : null, gamedir: $('gamedir').value.trim(), resolution: res, width: w, height: h, windowed: $('windowed').checked, mousesens: $('mousesens').value.trim(), clientmods: $('clientmods').checked, maxfps: $('maxfps').value, fov: fovValue(), focallength: $('focallength').checked, adsmult: $('adsmult').value.trim(), scopemult: $('scopemult').value.trim(), sidebutton1: $('sidebutton1').value, sidebutton2: $('sidebutton2').value, dxvk: $('dxvk').checked, classbuttons: $('classbuttons').checked } });
 });
 
 // Links of the bottom rail: the Rust side knows the addresses and opens them in the player's browser.
@@ -869,7 +895,7 @@ listen('done', (e) => {
   loadNotes(); // the server may have changed while the player was in the game
   histDirty = true;
   if ($('app').dataset.view === 'history' && !e.payload.error) loadHistory(true);
-  invoke('get_state').then((s) => showDxvk(s.dxvk)); // a game that failed on Vulkan turned it off
+  invoke('get_state').then((s) => { showDxvk(s.dxvk); keptName = s.keptname || ''; syncKept(); }); // a game that failed on Vulkan turned it off; a kept session may have started or ended
 });
 
 (async () => {
@@ -895,16 +921,19 @@ listen('done', (e) => {
   showDxvk(s.dxvk);
   $('dxvk').disabled = LINUX;
   $('classbuttons').checked = s.classbuttons !== false;
+  $('remember').checked = s.remember !== false;
+  keptName = s.keptname || '';
   // The language the player chose; the first time, English for a system in English and Spanish for the rest.
   const initialLang = s.lang || (/^en\b/i.test(navigator.language || '') ? 'en' : 'es');
   applyLang(initialLang);
   if (!s.lang && initialLang === 'en') invoke('set_lang', { lang: 'en' }).catch(() => {});
-  (s.name ? $('password') : $('name')).focus();
+  syncKept();
+  (s.name ? (keeps() ? $('play') : $('password')) : $('name')).focus();
   await loadNotes();
   if (!tauri) preview(location.hash.slice(1).split(','));
 })();
 
-// Outside the launcher only: states to look at, named in the address (index.html#history,settings,en,create,busy,calc,fault).
+// Outside the launcher only: states to look at, named in the address (index.html#history,settings,en,create,busy,calc,fault,kept).
 function preview(want) {
   if (want.includes('en')) applyLang('en');
   if (want.includes('auth')) previewHistoryMode = 'auth';
@@ -917,4 +946,5 @@ function preview(want) {
   if (want.includes('busy')) { setBusy(true); setStatus(lang === 'en' ? 'Downloading Yeti.big  (1840 of 4012 MB)' : 'Descargando Yeti.big  (1840 de 4012 MB)', 0.46); }
   if (want.includes('fault')) setStatus(lang === 'en' ? 'Incorrect nickname or password.' : 'Nickname o contraseña incorrectos.', -1, 'fault');
   if (want.includes('reset')) showReset(true);
+  if (want.includes('kept')) { keptName = 'Tester'; $('name').value = 'Tester'; syncKept(); }
 }

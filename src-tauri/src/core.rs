@@ -25,7 +25,7 @@ pub fn tr<'a>(es: &'a str, en: &'a str) -> &'a str {
 }
 
 /// Of this launcher; the server tells when there is a newer one (/launcher/version.txt or /launcher/version-linux.txt) and may refuse older ones.
-pub const VERSION: u32 = 23;
+pub const VERSION: u32 = 24;
 pub const GAME_EXE: &str = "GhostReconPhantoms.exe";
 
 pub struct Config {
@@ -213,8 +213,86 @@ pub fn new_recovery_key(name: &str, password: &str) -> String {
     post("/recovery", &format!("name={}&secret={}", escape(name), secret(name, password)))
 }
 
-fn login(name: &str, password: &str) -> String {
-    post("/login", &format!("name={}&secret={}&v={}", escape(name), secret(name, password), VERSION))
+fn login(name: &str, password: &str, remember: bool) -> String {
+    post("/login", &format!("name={}&secret={}&v={}{}", escape(name), secret(name, password), VERSION, if remember { "&remember=1" } else { "" }))
+}
+
+// "Mantener la sesión iniciada" (launcher 24): the server's remember key, kept in session.txt next to settings.txt
+// (never the password). /resume trades it for a game session and a new key, so a launcher opened at least once a
+// month signs in by itself; a password change, a reset or a sign-out ends it.
+fn kept_file() -> PathBuf {
+    data_dir().join("session.txt")
+}
+
+/// The account whose session this launcher keeps, and its remember key.
+fn kept() -> Option<(String, String)> {
+    let d = read_pairs(&kept_file());
+    match (d.get("name"), d.get("remember")) {
+        (Some(n), Some(k)) if !n.is_empty() && !k.is_empty() => Some((n.clone(), k.clone())),
+        _ => None,
+    }
+}
+
+/// The name of the account this launcher keeps signed in, if any.
+pub fn kept_name() -> Option<String> {
+    kept().map(|(n, _)| n)
+}
+
+fn kept_for(name: &str) -> Option<String> {
+    kept().filter(|(n, _)| n.eq_ignore_ascii_case(name.trim())).map(|(_, k)| k)
+}
+
+fn save_kept(name: &str, key: &str) {
+    let _ = std::fs::create_dir_all(data_dir());
+    let _ = std::fs::write(kept_file(), format!("name={}\nremember={}\n", name, key));
+}
+
+fn drop_kept() {
+    let _ = std::fs::remove_file(kept_file());
+}
+
+/// "Cerrar sesión": the server forgets this launcher's key and the launcher its file.
+pub fn sign_out() {
+    if let Some((n, k)) = kept() {
+        let r = post("/logout", &format!("name={}&remember={}", escape(&n), escape(&k)));
+        log(&format!("signed out of the kept session: {}", loggable(&r)));
+    }
+    drop_kept();
+    clear_session();
+}
+
+// a sign-in with the password and no "keep me signed in": the key this launcher held is ended, not the new session
+fn sign_out_quietly() {
+    if let Some((n, k)) = kept() {
+        let _ = post("/logout", &format!("name={}&remember={}", escape(&n), escape(&k)));
+    }
+    drop_kept();
+}
+
+fn resume(name: &str, key: &str) -> String {
+    post("/resume", &format!("name={}&remember={}&v={}", escape(name), escape(key), VERSION))
+}
+
+/// A game session for the kept account without the password: (name, token, vault key), and the new remember key
+/// stored. None when there is no kept session for that name or the server refused it (then it is dropped).
+fn resume_kept(name: &str) -> Result<Option<Vec<String>>, String> {
+    let Some(key) = kept_for(name) else { return Ok(None) };
+    let answer = resume(name, &key);
+    let a: Vec<String> = answer.split(' ').map(String::from).collect();
+    if a.len() >= 5 && a[0] == "OK" {
+        save_kept(&a[1], &a[4]);
+        remember_session(&a[1], &a[2]);
+        return Ok(Some(a));
+    }
+    if answer.starts_with("NET ") {
+        return Err(explain(&answer));
+    }
+    log(&format!("kept session refused: {}", loggable(&answer)));
+    drop_kept();
+    if answer.starts_with("ERR banned") || answer == "ERR update" {
+        return Err(explain(&answer));
+    }
+    Ok(None)
 }
 
 fn session_cache() -> &'static std::sync::Mutex<Option<(String, String)>> {
@@ -266,6 +344,9 @@ pub fn fetch_history(name: &str, password: &str, filter: &str, limit: u32) -> Re
         post("/history", &format!("name={}&token={}&limit={}&filter={}", escape(&stored), escape(&tok), lim, flt))
     } else if !password.is_empty() {
         post("/history", &format!("name={}&secret={}&limit={}&filter={}", escape(name), secret(name, password), lim, flt))
+    } else if let Some(a) = resume_kept(name)? {
+        used_token = true;
+        post("/history", &format!("name={}&token={}&limit={}&filter={}", escape(&a[1]), escape(&a[2]), lim, flt))
     } else {
         return Err("NEED_AUTH".into());
     };
@@ -1340,16 +1421,43 @@ fn set_resolution(game_dir: &Path, o: &PlayOptions) {
 }
 
 /// Signs in, brings the game folder up to date and runs the game until it exits.
-pub fn play(name: &str, password: &str, game_dir: &Path, o: &PlayOptions, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
+/// With an empty password, the session this launcher keeps for that name (see resume_kept); with a password and
+/// remember, a new kept session; with a password and no remember, none (a kept one is signed out).
+pub fn play(name: &str, password: &str, remember: bool, game_dir: &Path, o: &PlayOptions, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
     progress(tr("Iniciando sesión...", "Signing in..."), -1.0);
-    let answer = login(name, password);
-    let a: Vec<&str> = answer.split(' ').collect();
-    if a.len() < 3 || a[0] != "OK" {
-        log(&format!("login refused: {}", if answer.starts_with("OK") { "bad answer" } else { answer.as_str() }));
-        return Err(explain(&answer));
+    let owned: Vec<String> = if password.is_empty() {
+        match resume_kept(name)? {
+            Some(a) => {
+                log(&format!("signed in as {} (kept session)", a[1]));
+                a
+            }
+            None => return Err(tr("Tu sesión guardada terminó. Escribe tu contraseña.", "Your saved session ended. Enter your password.").into()),
+        }
+    } else {
+        let answer = login(name, password, remember);
+        let a: Vec<String> = answer.split(' ').map(String::from).collect();
+        if a.len() < 3 || a[0] != "OK" {
+            log(&format!("login refused: {}", if answer.starts_with("OK") { "bad answer" } else { answer.as_str() }));
+            return Err(explain(&answer));
+        }
+        log(&format!("signed in as {}", a[1]));
+        remember_session(&a[1], &a[2]);
+        if remember && a.len() >= 5 {
+            if kept().is_some_and(|(n, _)| !n.eq_ignore_ascii_case(&a[1])) {
+                sign_out_quietly();   // another account was kept here
+            }
+            save_kept(&a[1], &a[4]);
+        } else if kept_for(&a[1]).is_some() {
+            sign_out_quietly();   // this account, signed in without "keep me signed in"
+        }
+        a
+    };
+    // the vault key: "-" when the server has none (it stands in so the remember key stays the fifth field)
+    let mut a: Vec<&str> = owned.iter().map(String::as_str).collect();
+    a.truncate(4);
+    if a.len() == 4 && a[3] == "-" {
+        a.truncate(3);
     }
-    log(&format!("signed in as {}", a[1]));
-    remember_session(a[1], a[2]);
     let class_patches = if o.sync && a.len() >= 4 { fetch_slot_patches_from(a[3], "ui.txt") } else { Vec::new() };
     let profile_patches = if o.sync && a.len() >= 4 { fetch_slot_patches_from(a[3], "ui-profile.txt") } else { Vec::new() };
     let mut all_patches: Vec<SlotPatch> = Vec::with_capacity(class_patches.len() + profile_patches.len());
