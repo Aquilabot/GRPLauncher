@@ -39,7 +39,7 @@ const listen = tauri ? tauri.event.listen : async () => {};
 const TEXT = {
   es: {
     'nav.label': 'Secciones', 'nav.home': 'Inicio', 'nav.history': 'Historial', 'nav.settings': 'Ajustes', 'lang.label': 'Idioma',
-    'server.name': 'Servidor comunitario', 'server.place': 'São Paulo · 60 Hz',
+    'server.name': 'Servidor comunitario', 'server.place': 'São Paulo · 120 Hz',
     'notes.title': 'Novedades', 'notes.empty': 'Aún no hay novedades.', 'notes.new1': '1 nueva', 'notes.newN': '{n} nuevas', 'notes.fresh': 'Nuevo',
     'notes.pager': 'Paginación de novedades', 'notes.prev': 'Página anterior', 'notes.next': 'Página siguiente',
     'tag.servidor': 'Servidor', 'tag.launcher': 'Launcher', 'tag.juego': 'Juego',
@@ -86,7 +86,7 @@ const TEXT = {
   },
   en: {
     'nav.label': 'Sections', 'nav.home': 'Home', 'nav.history': 'History', 'nav.settings': 'Settings', 'lang.label': 'Language',
-    'server.name': 'Community server', 'server.place': 'São Paulo · 60 Hz',
+    'server.name': 'Community server', 'server.place': 'São Paulo · 120 Hz',
     'notes.title': 'Release notes', 'notes.empty': 'No updates published yet.', 'notes.new1': '1 new', 'notes.newN': '{n} new', 'notes.fresh': 'New',
     'notes.pager': 'Release notes pages', 'notes.prev': 'Previous page', 'notes.next': 'Next page',
     'tag.servidor': 'Server', 'tag.launcher': 'Launcher', 'tag.juego': 'Game',
