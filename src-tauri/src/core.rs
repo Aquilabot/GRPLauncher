@@ -633,25 +633,38 @@ fn self_update_at(base: &str, key: Option<&[u8; 32]>, exe: &Path, current_versio
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct BlockList {
+    block_size: u64,
+    hashes: Vec<String>,
+}
+
 struct Entry {
     must_match: bool, // false: settings the player may change, only fetched when missing
     sha: String,
     size: u64,
     path: String,
+    blocks: Option<BlockList>,
 }
 
-fn mtime(file: &Path) -> u128 {
-    std::fs::metadata(file).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos()).unwrap_or(0)
-}
-
-/// Makes the game folder equal to the vault's file list (manifest.txt: "vault <n>", then "<f|d> <sha256> <size> <path>").
-fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: &dyn Fn(&str, f64)) -> Result<(), String> {
-    let base = format!("{}/files/{}/", base_url(), vault_key);
-    let text = get_list(&base, "manifest.txt", 30).map_err(|e| format!("{}: {}", tr("No se pudo leer la lista de archivos del servidor", "Could not read the server's file list"), e))?;
-    let mut entries = Vec::new();
+/// Parses manifest.txt: "vault <n>", "<f|d> <sha256> <size> <path>", and optional per-block hashes
+/// ("b <block_size> <sha_block_0> ...") immediately following a large 'f' entry.
+fn parse_manifest(text: &str) -> (String, Vec<Entry>) {
+    let mut entries: Vec<Entry> = Vec::new();
     let mut vault = String::new();
     for line in text.lines() {
-        let a: Vec<&str> = line.trim_end().splitn(4, ' ').collect();
+        let trimmed = line.trim_end();
+        if let Some(rest) = trimmed.strip_prefix("b ") {
+            if let Some(last) = entries.last_mut() {
+                if last.must_match && last.size > 0 && last.blocks.is_none() {
+                    if let Some(bl) = parse_block_line(rest, last.size) {
+                        last.blocks = Some(bl);
+                    }
+                }
+            }
+            continue;
+        }
+        let a: Vec<&str> = trimmed.splitn(4, ' ').collect();
         if a.len() == 2 && a[0] == "vault" {
             vault = a[1].to_string();
         }
@@ -662,10 +675,251 @@ fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: 
                 continue;
             }
             if let Ok(size) = a[2].parse() {
-                entries.push(Entry { must_match: a[0] == "f", sha: a[1].to_string(), size, path: p.to_string() });
+                entries.push(Entry { must_match: a[0] == "f", sha: a[1].to_string(), size, path: p.to_string(), blocks: None });
             }
         }
     }
+    (vault, entries)
+}
+
+fn parse_block_line(rest: &str, file_size: u64) -> Option<BlockList> {
+    let mut parts = rest.split_whitespace();
+    let block_size: u64 = parts.next()?.parse().ok()?;
+    if block_size == 0 {
+        return None;
+    }
+    let expected = file_size.div_ceil(block_size) as usize;
+    let hashes: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
+    if hashes.len() != expected || !hashes.iter().all(|h| is_sha(h)) {
+        return None;
+    }
+    Some(BlockList { block_size, hashes })
+}
+
+/// Fetches a contiguous byte range [start, start + len) via HTTP Range and requires 206 Partial Content with exact length.
+fn fetch_range(url: &str, start: u64, len: usize) -> Result<Vec<u8>, String> {
+    if len == 0 {
+        return Ok(Vec::new());
+    }
+    let end = start + (len as u64) - 1;
+    let agent = ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(15)).timeout_read(Duration::from_secs(30)).build();
+    let resp = agent.get(url).set("Range", &format!("bytes={}-{}", start, end)).call().map_err(|e| e.to_string())?;
+    if resp.status() != 206 {
+        return Err(format!("server returned HTTP {} instead of 206 Partial Content", resp.status()));
+    }
+    let mut buf = Vec::with_capacity(len);
+    resp.into_reader().take((len as u64) + 1).read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    if buf.len() != len {
+        return Err(format!("short or oversized range response: expected {} bytes, got {}", len, buf.len()));
+    }
+    Ok(buf)
+}
+
+/// Atomically replaces `dst` with `src`, preserving `dst` if the swap fails (handles Windows rename-over-existing).
+fn swap_file_into_place(src: &Path, dst: &Path) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(src, dst).map_err(|e| e.to_string())
+    }
+    #[cfg(windows)]
+    {
+        let backup = PathBuf::from(format!("{}.old", dst.display()));
+        let _ = std::fs::remove_file(&backup);
+        let had_dst = dst.exists();
+        if had_dst {
+            std::fs::rename(dst, &backup).map_err(|e| e.to_string())?;
+        }
+        if let Err(e) = std::fs::rename(src, dst) {
+            if had_dst {
+                let _ = std::fs::rename(&backup, dst);
+            }
+            return Err(e.to_string());
+        }
+        if had_dst {
+            let _ = std::fs::remove_file(&backup);
+        }
+        Ok(())
+    }
+}
+
+enum DeltaOutcome {
+    /// Target file was reconstructed in a temp copy, full-file SHA-256 matched, and swapped into place.
+    Patched { reused_blocks: usize, fetched_blocks: usize, fetched_bytes: u64 },
+    /// No blocks could be reused or server rejected Range; caller should fall back to full download().
+    FallbackFull(String),
+}
+
+/// Updates an existing large file by comparing fixed-size blocks against `blocks`, fetching only differing blocks
+/// with HTTP Range into `<file>.delta.part`, verifying every block and the final full-file SHA-256, and swapping
+/// into place only on a full match. Never modifies `file` in place; a partial or bad update leaves `file` untouched.
+fn download_blocks(
+    url: &str,
+    file: &Path,
+    size: u64,
+    sha: &str,
+    blocks: &BlockList,
+    progress: &mut dyn FnMut(u64),
+) -> Result<DeltaOutcome, String> {
+    let local_len = match std::fs::metadata(file) {
+        Ok(m) if m.is_file() => m.len(),
+        _ => return Ok(DeltaOutcome::FallbackFull("no local file".into())),
+    };
+    let n = blocks.hashes.len();
+    let bsz = blocks.block_size;
+    let block_len = |i: usize| -> usize {
+        let start = (i as u64) * bsz;
+        std::cmp::min(bsz, size - start) as usize
+    };
+
+    // 1. Hash each local block to see what can be reused.
+    let mut src = std::fs::File::open(file).map_err(|e| e.to_string())?;
+    let mut matched = vec![false; n];
+    let mut reused_blocks = 0usize;
+    let mut scratch = vec![0u8; std::cmp::min(bsz as usize, 4 << 20)];
+    for (i, want_hash) in blocks.hashes.iter().enumerate() {
+        let blen = block_len(i);
+        let start = (i as u64) * bsz;
+        if start + (blen as u64) > local_len {
+            break;
+        }
+        let mut h = Sha256::new();
+        let mut rem = blen;
+        while rem > 0 {
+            let take = std::cmp::min(rem, scratch.len());
+            src.read_exact(&mut scratch[..take]).map_err(|e| e.to_string())?;
+            h.update(&scratch[..take]);
+            rem -= take;
+        }
+        if hex::encode(h.finalize()) == *want_hash {
+            matched[i] = true;
+            reused_blocks += 1;
+        }
+    }
+    if reused_blocks == 0 {
+        return Ok(DeltaOutcome::FallbackFull("0 local blocks match".into()));
+    }
+
+    // 2. Write reconstructed file into a temp copy alongside the target.
+    let part = PathBuf::from(format!("{}.delta.part", file.display()));
+    let _ = std::fs::remove_file(&part);
+    let max_range_bytes: u64 = 16 << 20; // coalesce consecutive missing blocks up to 16 MiB per Range request
+
+    let build = (|| -> Result<(usize, u64), String> {
+        let mut dst = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut fetched_blocks = 0usize;
+        let mut fetched_bytes = 0u64;
+        let mut i = 0usize;
+        while i < n {
+            if matched[i] {
+                let start = (i as u64) * bsz;
+                let mut rem = block_len(i);
+                src.seek(std::io::SeekFrom::Start(start)).map_err(|e| e.to_string())?;
+                while rem > 0 {
+                    let take = std::cmp::min(rem, scratch.len());
+                    src.read_exact(&mut scratch[..take]).map_err(|e| e.to_string())?;
+                    dst.write_all(&scratch[..take]).map_err(|e| e.to_string())?;
+                    rem -= take;
+                }
+                i += 1;
+                continue;
+            }
+            // Coalesce consecutive missing blocks up to max_range_bytes.
+            let run_start = i;
+            let mut run_bytes = 0usize;
+            while i < n && !matched[i] {
+                let bl = block_len(i);
+                if run_bytes > 0 && (run_bytes as u64) + (bl as u64) > max_range_bytes {
+                    break;
+                }
+                run_bytes += bl;
+                i += 1;
+            }
+            let byte_offset = (run_start as u64) * bsz;
+            let mut data = None;
+            let mut last_err = String::new();
+            let mut range_unsupported = false;
+            for _attempt in 0..6 {
+                match fetch_range(url, byte_offset, run_bytes) {
+                    Ok(buf) => {
+                        // Verify every block hash in this coalesced run before writing.
+                        let mut pos = 0usize;
+                        let mut ok = true;
+                        for bi in run_start..i {
+                            let bl = block_len(bi);
+                            if sha256_bytes(&buf[pos..pos + bl]) != blocks.hashes[bi] {
+                                ok = false;
+                                last_err = format!("block {} checksum mismatch", bi);
+                                break;
+                            }
+                            pos += bl;
+                        }
+                        if ok {
+                            data = Some(buf);
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        if e.contains("instead of 206") {
+                            range_unsupported = true;
+                            last_err = e;
+                            break;
+                        }
+                        last_err = e;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            if range_unsupported {
+                return Err(format!("FALLBACK:{}", last_err));
+            }
+            let buf = data.ok_or_else(|| format!("block range {}..{} failed: {}", run_start, i, last_err))?;
+            dst.write_all(&buf).map_err(|e| e.to_string())?;
+            fetched_blocks += i - run_start;
+            fetched_bytes += buf.len() as u64;
+            progress(buf.len() as u64);
+        }
+        dst.flush().map_err(|e| e.to_string())?;
+        Ok((fetched_blocks, fetched_bytes))
+    })();
+
+    drop(src);
+    let (fetched_blocks, fetched_bytes) = match build {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            if let Some(reason) = e.strip_prefix("FALLBACK:") {
+                return Ok(DeltaOutcome::FallbackFull(reason.to_string()));
+            }
+            return Err(e);
+        }
+    };
+
+    // 3. Full-file size + SHA-256 verification before atomic swap.
+    let ok = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0) == size
+        && sha256_file(&part).map(|h| h == sha).unwrap_or(false);
+    if !ok {
+        let _ = std::fs::remove_file(&part);
+        return Err(tr("el archivo parcheado no coincide con el hash final", "patched file full checksum mismatch").into());
+    }
+    swap_file_into_place(&part, file)?;
+    Ok(DeltaOutcome::Patched { reused_blocks, fetched_blocks, fetched_bytes })
+}
+
+fn mtime(file: &Path) -> u128 {
+    std::fs::metadata(file).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos()).unwrap_or(0)
+}
+
+/// Makes the game folder equal to the vault's file list (manifest.txt: "vault <n>", then "<f|d> <sha256> <size> <path>",
+/// with optional "b <block_size> <sha>..." lines for large files > 64 MiB).
+fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: &dyn Fn(&str, f64)) -> Result<(), String> {
+    let base = format!("{}/files/{}/", base_url(), vault_key);
+    let key = list_key()?;
+    sync_game_at(&base, key.as_ref(), game_dir, patches, progress)
+}
+
+fn sync_game_at(base: &str, key: Option<&[u8; 32]>, game_dir: &Path, patches: &[SlotPatch], progress: &dyn Fn(&str, f64)) -> Result<(), String> {
+    let text = get_list_with(key, base, "manifest.txt", 30).map_err(|e| format!("{}: {}", tr("No se pudo leer la lista de archivos del servidor", "Could not read the server's file list"), e))?;
+    let (vault, entries) = parse_manifest(&text);
     if entries.is_empty() {
         return Err(tr("El servidor no publicó la lista de archivos del juego.", "The server did not publish the list of game files.").into());
     }
@@ -724,10 +978,31 @@ fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: 
             done += n;
             progress(&format!("{} {}  ({} {} {} MB)", tr("Descargando", "Downloading"), name, done >> 20, tr("de", "of"), total >> 20), fraction(done));
         };
-        if let Err(err) = download(&url, &file, e.size, &e.sha, &mut step) {
-            save_cache(&cache);
-            log(&format!("sync failed: {}", err));
-            return Err(err);
+        let mut handled_by_delta = false;
+        if let Some(bl) = &e.blocks {
+            if file.is_file() {
+                match download_blocks(&url, &file, e.size, &e.sha, bl, &mut step) {
+                    Ok(DeltaOutcome::Patched { reused_blocks, fetched_blocks, fetched_bytes }) => {
+                        log(&format!("{}: delta-patched ({} blocks reused, {} fetched, {} KB)", e.path, reused_blocks, fetched_blocks, fetched_bytes >> 10));
+                        handled_by_delta = true;
+                    }
+                    Ok(DeltaOutcome::FallbackFull(why)) => {
+                        log(&format!("{}: delta fallback ({}), fetching full file", e.path, why));
+                    }
+                    Err(err) => {
+                        save_cache(&cache);
+                        log(&format!("sync delta failed: {}", err));
+                        return Err(err);
+                    }
+                }
+            }
+        }
+        if !handled_by_delta {
+            if let Err(err) = download(&url, &file, e.size, &e.sha, &mut step) {
+                save_cache(&cache);
+                log(&format!("sync failed: {}", err));
+                return Err(err);
+            }
         }
         done = start + e.size;
         fetched += 1;
@@ -2135,6 +2410,222 @@ mod tests {
             std::thread::sleep(Duration::from_millis(25));
         }
         assert_eq!(std::fs::read_to_string(&marker).unwrap(), "updated-ok");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn make_blocks(data: &[u8], block_size: u64) -> BlockList {
+        let hashes = data.chunks(block_size as usize).map(sha256_bytes).collect();
+        BlockList { block_size, hashes }
+    }
+
+    #[test]
+    fn parses_manifest_block_lines_and_ignores_malformed_ones() {
+        let h0 = "a".repeat(64);
+        let h1 = "b".repeat(64);
+        let h2 = "c".repeat(64);
+        let full = "d".repeat(64);
+        let manifest = format!(
+            "vault 1764000000\n\
+             b 4096 {h0}\n\
+             d {full} 100 GraphicSettings.ini\n\
+             b 100 {h0}\n\
+             f {full} 10000 Yeti.big\n\
+             b 4096 {h0} {h1} {h2}\n\
+             f {full} 5000 BadCount.bin\n\
+             b 4096 {h0}\n\
+             f {full} 5000 BadHex.bin\n\
+             b 4096 {h0} not-a-sha\n"
+        );
+        let (vault, entries) = parse_manifest(&manifest);
+        assert_eq!(vault, "1764000000");
+        assert_eq!(entries.len(), 4);
+        assert!(entries[0].blocks.is_none()); // 'd' entries ignore block lines
+        assert_eq!(
+            entries[1].blocks,
+            Some(BlockList { block_size: 4096, hashes: vec![h0.clone(), h1.clone(), h2.clone()] })
+        );
+        assert!(entries[2].blocks.is_none()); // wrong block count rejected
+        assert!(entries[3].blocks.is_none()); // invalid hex rejected
+    }
+
+    /// Minimal HTTP/1.1 test server that serves manifest.txt, manifest.txt.sig, and files/<name> with Range support.
+    fn serve_vault(
+        manifest: String,
+        sig: Option<String>,
+        file_bytes: Vec<u8>,
+        honor_range: bool,
+    ) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/", listener.local_addr().unwrap());
+        let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let req_log = requests.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let mut buf = [0u8; 4096];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    continue;
+                }
+                let text = String::from_utf8_lossy(&buf[..n]).to_string();
+                let first = text.lines().next().unwrap_or("").to_string();
+                let range_hdr = text.lines().find_map(|l| {
+                    let (k, v) = l.split_once(':')?;
+                    k.eq_ignore_ascii_case("range").then(|| v.trim().to_string())
+                });
+                req_log.lock().unwrap().push(format!("{} | {:?}", first, range_hdr));
+                if first.starts_with("GET /manifest.txt.sig ") {
+                    let (st, b) = match &sig {
+                        Some(s) => ("200 OK", s.as_bytes()),
+                        None => ("404 Not Found", &[][..]),
+                    };
+                    let _ = stream.write_all(format!("HTTP/1.1 {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", st, b.len()).as_bytes());
+                    let _ = stream.write_all(b);
+                } else if first.starts_with("GET /manifest.txt ") {
+                    let b = manifest.as_bytes();
+                    let _ = stream.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", b.len()).as_bytes());
+                    let _ = stream.write_all(b);
+                } else if honor_range && range_hdr.is_some() {
+                    let spec = range_hdr.unwrap();
+                    let spec = spec.strip_prefix("bytes=").unwrap_or("");
+                    let (s, e) = spec.split_once('-').unwrap_or(("0", ""));
+                    let start: usize = s.parse().unwrap_or(0);
+                    let end: usize = if e.is_empty() {
+                        file_bytes.len().saturating_sub(1)
+                    } else {
+                        std::cmp::min(e.parse().unwrap_or(0), file_bytes.len().saturating_sub(1))
+                    };
+                    let slice = &file_bytes[start..=end];
+                    let head = format!(
+                        "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {}-{}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        start,
+                        end,
+                        file_bytes.len(),
+                        slice.len()
+                    );
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(slice);
+                } else {
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", file_bytes.len());
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(&file_bytes);
+                }
+            }
+        });
+        (base, requests)
+    }
+
+    #[test]
+    fn block_delta_fetches_only_changed_and_appended_blocks() {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let dir = std::env::temp_dir().join(format!("grp-delta-ok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let bsz = 1024u64;
+        // Original 8 blocks (8192 bytes); new version changes block 0 (index) and appends 1.5 blocks at the end (9728 bytes).
+        let old_data: Vec<u8> = (0..8192usize).map(|i| ((i * 31 + 7) % 251) as u8).collect();
+        let mut new_data = old_data.clone();
+        new_data[16] ^= 0xFF; // index header block 0 changed
+        new_data.extend((0..1536usize).map(|i| ((i * 13 + 3) % 241) as u8)); // appended data: blocks 8 & 9
+
+        let local_file = dir.join("Yeti.big");
+        std::fs::write(&local_file, &old_data).unwrap();
+
+        let blocks = make_blocks(&new_data, bsz);
+        let new_sha = sha256_bytes(&new_data);
+        let manifest = format!(
+            "vault 1764000001\nf {} {} Yeti.big\nb {} {}\n",
+            new_sha,
+            new_data.len(),
+            bsz,
+            blocks.hashes.join(" ")
+        );
+        let signer = SigningKey::from_bytes(&[11u8; 32]);
+        let pubkey = signer.verifying_key().to_bytes();
+        let sig = hex::encode(signer.sign(format!("manifest.txt\n{}", manifest).as_bytes()).to_bytes());
+        let (base, reqs) = serve_vault(manifest, Some(sig), new_data.clone(), true);
+
+        sync_game_at(&base, Some(&pubkey), &dir, &[], &|_, _| {}).unwrap();
+        assert_eq!(std::fs::read(&local_file).unwrap(), new_data);
+        assert!(!dir.join("Yeti.big.delta.part").exists());
+
+        // Only 2 Range requests should have been made: block 0 (0..1023) and coalesced blocks 8..9 (8192..9727).
+        let log = reqs.lock().unwrap();
+        let file_reqs: Vec<&String> = log.iter().filter(|r| r.contains("/files/Yeti.big")).collect();
+        assert_eq!(file_reqs.len(), 2, "expected 2 coalesced Range requests, got {:?}", file_reqs);
+        assert!(file_reqs[0].contains("bytes=0-1023"), "{:?}", file_reqs);
+        assert!(file_reqs[1].contains("bytes=8192-9727"), "{:?}", file_reqs);
+
+        // Second sync is a complete cache/hash hit with zero file requests.
+        let before = log.len();
+        drop(log);
+        sync_game_at(&base, Some(&pubkey), &dir, &[], &|_, _| {}).unwrap();
+        let after_file_reqs: Vec<String> = reqs.lock().unwrap()[before..]
+            .iter()
+            .filter(|r| r.contains("/files/Yeti.big"))
+            .cloned()
+            .collect();
+        assert!(after_file_reqs.is_empty(), "second sync should fetch nothing: {:?}", after_file_reqs);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn block_delta_keeps_original_intact_when_final_sha_mismatches() {
+        let dir = std::env::temp_dir().join(format!("grp-delta-badsha-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let bsz = 1024u64;
+        let old_data: Vec<u8> = (0..4096usize).map(|i| (i % 199) as u8).collect();
+        let mut new_data = old_data.clone();
+        new_data[3072] ^= 0x55; // change block 3 only
+
+        let local_file = dir.join("Yeti.big");
+        std::fs::write(&local_file, &old_data).unwrap();
+
+        let blocks = make_blocks(&new_data, bsz);
+        let wrong_full_sha = "0".repeat(64);
+        let (base, _) = serve_vault(String::new(), None, new_data.clone(), true);
+        let url = format!("{}files/Yeti.big", base);
+
+        let res = download_blocks(&url, &local_file, new_data.len() as u64, &wrong_full_sha, &blocks, &mut |_| {});
+        assert!(res.is_err());
+        assert_eq!(std::fs::read(&local_file).unwrap(), old_data, "original file must remain untouched");
+        assert!(!dir.join("Yeti.big.delta.part").exists(), "temp delta copy must be cleaned up");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn block_delta_falls_back_to_full_download_when_server_ignores_range() {
+        let dir = std::env::temp_dir().join(format!("grp-delta-norange-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let bsz = 1024u64;
+        let old_data: Vec<u8> = (0..4096usize).map(|i| (i % 173) as u8).collect();
+        let mut new_data = old_data.clone();
+        new_data[2048] ^= 0xAA;
+
+        let local_file = dir.join("Yeti.big");
+        std::fs::write(&local_file, &old_data).unwrap();
+
+        let blocks = make_blocks(&new_data, bsz);
+        let new_sha = sha256_bytes(&new_data);
+        let manifest = format!(
+            "vault 1764000002\nf {} {} Yeti.big\nb {} {}\n",
+            new_sha,
+            new_data.len(),
+            bsz,
+            blocks.hashes.join(" ")
+        );
+        let (base, _) = serve_vault(manifest, None, new_data.clone(), false);
+
+        sync_game_at(&base, None, &dir, &[], &|_, _| {}).unwrap();
+        assert_eq!(std::fs::read(&local_file).unwrap(), new_data);
+        assert!(!dir.join("Yeti.big.delta.part").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
