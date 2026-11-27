@@ -35,6 +35,7 @@ pub struct Config {
     pub account_url: String,  // full address of the account service and downloads; empty = see base_url
     pub port: u16,            // UDP, lobby
     pub access_key: String,
+    pub sign_key: String, // public key the server's lists are signed with (64 hex); see list_key
     pub language: String,
     // Linux only: the Wine prefix the game runs in and the Proton umu-run uses.
     pub prefix: String,
@@ -72,6 +73,7 @@ pub fn config() -> &'static Config {
             account_url: get("accounturl", ""),
             port: get("port", "21031").parse().unwrap_or(21031),
             access_key: get("accesskey", "8dtRv2oj"),
+            sign_key: get("signkey", ""),
             language: get("language", "english"),
             prefix: get("prefix", ""),
             proton: get("proton", "GE-Proton"),
@@ -429,6 +431,68 @@ fn get_text(url: &str, seconds: u64) -> Result<String, String> {
     ureq::get(url).timeout(Duration::from_secs(seconds)).call().map_err(|e| e.to_string())?.into_string().map_err(|e| e.to_string())
 }
 
+// ---- signed lists ----
+// What the launcher installs it learns from short lists on the server: the launcher's own version and hash, the game's
+// file list, the hash of each DLL it puts in the game folder, the patches of Yeti.big. A hash from the same server as
+// the file only proves the download arrived whole. Each list therefore comes with <list>.sig, made on the publisher's
+// machine with a key the server never holds (tools/sign.sh); a server somebody else got into can then withhold an
+// update, not hand out its own program.
+
+/// The public half of the key the community server's lists are signed with (tools/sign.sh --public).
+const HOME_SIGN_KEY: &str = "7938bd6dfb02299ad8193f2624808cd1d3997d5bac3d093b64a46025d018a3db";
+
+/// The key the lists of the configured server must carry: ours for the community server; for another server the
+/// "signkey" of launcher.ini, and none when it has none (your own machine: its lists are taken as they come).
+fn list_key() -> Result<Option<[u8; 32]>, String> {
+    let c = config();
+    let hex_key = if base_url() == HOME_ACCOUNT_URL { HOME_SIGN_KEY } else { c.sign_key.as_str() };
+    if hex_key.is_empty() {
+        return Ok(None);
+    }
+    let mut key = [0u8; 32];
+    hex::decode_to_slice(hex_key, &mut key).map_err(|_| "signkey in launcher.ini is not 64 hex digits".to_string())?;
+    Ok(Some(key))
+}
+
+/// Whether `sig_hex` is the signature of the list `name` with the bytes `text`, by `key`. The name is signed with
+/// the bytes, so a list is only good in its own place (client/d3d9.txt cannot stand in for client/version.txt).
+fn verify_list(key: &[u8; 32], name: &str, text: &[u8], sig_hex: &str) -> Result<(), String> {
+    use ed25519_dalek::{Signature, VerifyingKey};
+    let mut sig = [0u8; 64];
+    hex::decode_to_slice(sig_hex.trim(), &mut sig).map_err(|_| format!("{}.sig is not a signature", name))?;
+    let key = VerifyingKey::from_bytes(key).map_err(|_| "the signing key is not a key".to_string())?;
+    let mut msg = Vec::with_capacity(name.len() + 1 + text.len());
+    msg.extend_from_slice(name.as_bytes());
+    msg.push(b'\n');
+    msg.extend_from_slice(text);
+    key.verify_strict(&msg, &Signature::from_bytes(&sig)).map_err(|_| format!("{} does not carry the publisher's signature", name))
+}
+
+/// The list at `root` + `name`, refused unless its signature is good (when the server has a key: list_key). A list
+/// and its signature are two uploads, so a mismatch is asked for once more before it counts.
+fn get_list(root: &str, name: &str, seconds: u64) -> Result<String, String> {
+    get_list_with(list_key()?.as_ref(), root, name, seconds)
+}
+
+fn get_list_with(key: Option<&[u8; 32]>, root: &str, name: &str, seconds: u64) -> Result<String, String> {
+    let Some(key) = key else {
+        return get_text(&format!("{}{}", root, name), seconds);
+    };
+    let mut last = String::new();
+    for attempt in 0..2 {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_secs(2));
+        }
+        let text = get_text(&format!("{}{}", root, name), seconds)?;
+        let sig = get_text(&format!("{}{}.sig", root, name), seconds).map_err(|e| format!("{}.sig: {}", name, e))?;
+        match verify_list(key, name, text.as_bytes(), &sig) {
+            Ok(()) => return Ok(text),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
 fn sha256_file(file: &Path) -> std::io::Result<String> {
     let mut f = std::fs::File::open(file)?;
     let mut h = Sha256::new();
@@ -511,14 +575,21 @@ pub fn self_update(args: &[String]) -> bool {
     } else {
         ("version-linux.txt", "GRPLauncher-linux")
     };
-    self_update_at(&base_url(), &exe, VERSION, ver_file, bin_file, args)
+    let key = match list_key() {
+        Ok(k) => k,
+        Err(e) => {
+            log(&format!("launcher update check failed: {}", e));
+            return false;
+        }
+    };
+    self_update_at(&base_url(), key.as_ref(), &exe, VERSION, ver_file, bin_file, args)
 }
 
-fn self_update_at(base: &str, exe: &Path, current_version: u32, ver_file: &str, bin_file: &str, args: &[String]) -> bool {
+fn self_update_at(base: &str, key: Option<&[u8; 32]>, exe: &Path, current_version: u32, ver_file: &str, bin_file: &str, args: &[String]) -> bool {
     let old = PathBuf::from(format!("{}.old", exe.display()));
     let fresh = PathBuf::from(format!("{}.new", exe.display()));
     let _ = std::fs::remove_file(&old);
-    let text = match get_text(&format!("{}/launcher/{}", base, ver_file), 6) {
+    let text = match get_list_with(key, &format!("{}/", base), &format!("launcher/{}", ver_file), 6) {
         Ok(t) => t,
         Err(e) => {
             log(&format!("launcher update check failed: {}", e));
@@ -576,7 +647,7 @@ fn mtime(file: &Path) -> u128 {
 /// Makes the game folder equal to the vault's file list (manifest.txt: "vault <n>", then "<f|d> <sha256> <size> <path>").
 fn sync_game(vault_key: &str, game_dir: &Path, patches: &[SlotPatch], progress: &dyn Fn(&str, f64)) -> Result<(), String> {
     let base = format!("{}/files/{}/", base_url(), vault_key);
-    let text = get_text(&format!("{}manifest.txt", base), 30).map_err(|e| format!("{}: {}", tr("No se pudo leer la lista de archivos del servidor", "Could not read the server's file list"), e))?;
+    let text = get_list(&base, "manifest.txt", 30).map_err(|e| format!("{}: {}", tr("No se pudo leer la lista de archivos del servidor", "Could not read the server's file list"), e))?;
     let mut entries = Vec::new();
     let mut vault = String::new();
     for line in text.lines() {
@@ -721,7 +792,7 @@ fn parse_slot_line(line: &str) -> Option<SlotPatch> {
 /// The patches published in `client/ui/<listing>`, with their bytes checked. Any problem: logged, and none.
 fn fetch_slot_patches_from(vault_key: &str, listing: &str) -> Vec<SlotPatch> {
     let base = format!("{}/files/{}/client/ui/", base_url(), vault_key);
-    let text = match get_text(&format!("{}{}", base, listing), 10) {
+    let text = match get_list(&format!("{}/files/{}/", base_url(), vault_key), &format!("client/ui/{}", listing), 10) {
         Ok(t) => t,
         Err(e) => {
             log(&format!("ui patches: no client/ui/{} ({})", listing, e));
@@ -964,7 +1035,7 @@ fn fetch_client_dll(vault_key: &str, dll: &Path) -> Result<(), String> {
     let name = dll.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let listing = format!("{}.txt", name.trim_end_matches(".dll"));
     let base = format!("{}/files/{}/client/", base_url(), vault_key);
-    let text = get_text(&format!("{}{}", base, listing), 10)?;
+    let text = get_list(&format!("{}/files/{}/", base_url(), vault_key), &format!("client/{}", listing), 10)?;
     let mut v = text.split_whitespace();
     let (sha, size) = match (v.next(), v.next().and_then(|s| s.parse::<u64>().ok())) {
         (Some(sha), Some(size)) if sha.len() == 64 && sha.bytes().all(|b| b.is_ascii_hexdigit()) => (sha.to_lowercase(), size),
@@ -1650,12 +1721,30 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     progress(tr("Preparando Proton...", "Preparing Proton..."), -1.0);
     let helper = share_dir().join("GRPLauncher.exe");
     let _ = std::fs::create_dir_all(share_dir());
-    let published = get_text(&format!("{}/launcher/version.txt", base_url()), 10).unwrap_or_default();
-    let want = published.split_whitespace().nth(1).unwrap_or("").to_lowercase();
-    if !helper.is_file() || (!want.is_empty() && sha256_file(&helper).map(|h| h != want).unwrap_or(true)) {
-        let resp = ureq::get(&format!("{}/launcher/GRPLauncher.exe", base_url())).timeout(Duration::from_secs(120)).call().map_err(|e| format!("{}: {}", tr("No se pudo descargar el componente de Windows", "Could not download the Windows helper"), e))?;
-        let mut f = std::fs::File::create(&helper).map_err(|e| e.to_string())?;
-        std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| e.to_string())?;
+    // The helper is the Windows launcher the server publishes: the one its signed version.txt names, checked after
+    // the download and before it runs. Without that list (no network) the helper already here is used as it is.
+    let no_helper = |e: String| format!("{}: {}", tr("No se pudo descargar el componente de Windows", "Could not download the Windows helper"), e);
+    match get_list(&format!("{}/", base_url()), "launcher/version.txt", 10) {
+        Ok(published) => {
+            let want = published.split_whitespace().nth(1).unwrap_or("").to_lowercase();
+            if !is_sha(&want) {
+                return Err(no_helper("launcher/version.txt names no hash".into()));
+            }
+            if sha256_file(&helper).map(|h| h != want).unwrap_or(true) {
+                let fresh = share_dir().join("GRPLauncher.exe.new");
+                let resp = ureq::get(&format!("{}/launcher/GRPLauncher.exe", base_url())).timeout(Duration::from_secs(120)).call().map_err(|e| no_helper(e.to_string()))?;
+                let mut f = std::fs::File::create(&fresh).map_err(|e| e.to_string())?;
+                std::io::copy(&mut resp.into_reader(), &mut f).map_err(|e| e.to_string())?;
+                drop(f);
+                if sha256_file(&fresh).map(|h| h != want).unwrap_or(true) {
+                    let _ = std::fs::remove_file(&fresh);
+                    return Err(no_helper("wrong hash".into()));
+                }
+                std::fs::rename(&fresh, &helper).map_err(|e| e.to_string())?;
+            }
+        }
+        Err(e) if helper.is_file() => log(&format!("windows helper not checked ({}), using the one here", e)),
+        Err(e) => return Err(no_helper(e)),
     }
     let ini = exe_dir().join("launcher.ini");
     if ini.is_file() {
@@ -1737,6 +1826,35 @@ mod tests {
         let new: Vec<u8> = orig.iter().map(|b| b ^ 0x5a).collect();
         let p = SlotPatch { path: "Yeti.big".into(), offset: 1000, len: 100, file_size: 4096, sha_orig: sha256_bytes(&orig), sha_new: sha256_bytes(&new), orig, new };
         (dir, p)
+    }
+
+    // Made with tools/sign.sh and a key made for this test: the launcher must read what that script writes.
+    const TEST_KEY: &str = "f455a99c0820637797bdd6a348cfba01e963919cf01336895b8811f030f7c8be";
+    const TEST_SIG: &str = "720d7df2fec26f48b2342aebe031299669eaaceb14060f869ab2fffe381de84d5f84834b03739e96e4b1da44088e6ea9c7a069ea5f59a9dbcdf6c69cad203209";
+
+    fn test_key() -> [u8; 32] {
+        let mut k = [0u8; 32];
+        hex::decode_to_slice(TEST_KEY, &mut k).unwrap();
+        k
+    }
+
+    #[test]
+    fn a_list_signed_by_the_publisher_is_believed() {
+        assert_eq!(verify_list(&test_key(), "launcher/version.txt", b"24 abc\n", TEST_SIG), Ok(()));
+        assert_eq!(verify_list(&test_key(), "launcher/version.txt", b"24 abc\n", &format!("{}\n", TEST_SIG)), Ok(()));
+    }
+
+    #[test]
+    fn a_changed_list_a_list_in_another_place_or_another_key_is_refused() {
+        let k = test_key();
+        assert!(verify_list(&k, "launcher/version.txt", b"25 abc\n", TEST_SIG).is_err());
+        assert!(verify_list(&k, "launcher/version-linux.txt", b"24 abc\n", TEST_SIG).is_err());
+        assert!(verify_list(&k, "launcher/version.txt", b"24 abc\n", &TEST_SIG.replace('7', "8")).is_err());
+        assert!(verify_list(&k, "launcher/version.txt", b"24 abc\n", "").is_err());
+        assert!(verify_list(&k, "launcher/version.txt", b"24 abc\n", "<html>404</html>").is_err());
+        let mut other = [0u8; 32];
+        hex::decode_to_slice(HOME_SIGN_KEY, &mut other).unwrap();
+        assert!(verify_list(&other, "launcher/version.txt", b"24 abc\n", TEST_SIG).is_err());
     }
 
     #[test]
@@ -1895,6 +2013,65 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn self_update_takes_only_a_version_list_the_publisher_signed() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use std::net::TcpListener;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("grp-signed-update-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("GRPLauncher");
+        std::fs::write(&exe, b"#!/bin/sh\necho old\n").unwrap();
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let payload = b"#!/bin/sh\nexit 0\n".to_vec();
+        let list = format!("23 {}\n", hex::encode(Sha256::digest(&payload)));
+        let publisher = SigningKey::from_bytes(&[7u8; 32]);
+        let key = publisher.verifying_key().to_bytes();
+        let sign = |who: &SigningKey, name: &str| hex::encode(who.sign(format!("{}\n{}", name, list).as_bytes()).to_bytes());
+
+        // answers until the test is over: the list, its signature (or 404 when there is none) and the program
+        let serve = |sig: Option<String>| -> String {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let base = format!("http://{}", listener.local_addr().unwrap());
+            let (list, payload) = (list.clone(), payload.clone());
+            std::thread::spawn(move || {
+                for stream in listener.incoming() {
+                    let Ok(mut stream) = stream else { break };
+                    let mut req = [0u8; 1024];
+                    let n = stream.read(&mut req).unwrap_or(0);
+                    let line = String::from_utf8_lossy(&req[..n]).to_string();
+                    let (status, body): (&str, Vec<u8>) = if line.starts_with("GET /launcher/version-linux.txt.sig") {
+                        match &sig {
+                            Some(s) => ("200 OK", s.clone().into_bytes()),
+                            None => ("404 Not Found", Vec::new()),
+                        }
+                    } else if line.starts_with("GET /launcher/version-linux.txt") {
+                        ("200 OK", list.clone().into_bytes())
+                    } else {
+                        ("200 OK", payload.clone())
+                    };
+                    let _ = stream.write_all(format!("HTTP/1.1 {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", status, body.len()).as_bytes());
+                    let _ = stream.write_all(&body);
+                }
+            });
+            base
+        };
+        let update = |base: &str| self_update_at(base, Some(&key), &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]);
+        let untouched = || std::fs::read(&exe).unwrap() == b"#!/bin/sh\necho old\n";
+
+        // no signature, somebody else's signature, the signature of the same list in another place: no update
+        assert!(!update(&serve(None)) && untouched());
+        assert!(!update(&serve(Some(sign(&SigningKey::from_bytes(&[8u8; 32]), "launcher/version-linux.txt")))) && untouched());
+        assert!(!update(&serve(Some(sign(&publisher, "launcher/version.txt")))) && untouched());
+        // the publisher's: updated
+        assert!(update(&serve(Some(sign(&publisher, "launcher/version-linux.txt")))));
+        assert_eq!(std::fs::read(&exe).unwrap(), payload);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn self_update_replaces_and_runs_linux_binary() {
         use std::net::TcpListener;
         use std::os::unix::fs::PermissionsExt;
@@ -1934,19 +2111,19 @@ mod tests {
 
         // 1. Same version -> no update
         let (base, h) = serve(format!("22 {}\n", good_sha), payload.clone(), 1);
-        assert!(!self_update_at(&base, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]));
+        assert!(!self_update_at(&base, None, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]));
         h.join().unwrap();
 
         // 2. Bad hash -> rejected, original file kept, .new removed
         let (base, h) = serve("23 deadbeef\n".into(), payload.clone(), 2);
-        assert!(!self_update_at(&base, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]));
+        assert!(!self_update_at(&base, None, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &[]));
         h.join().unwrap();
         assert_eq!(std::fs::read(&exe).unwrap(), b"#!/bin/sh\necho old\n");
         assert!(!dir.join("GRPLauncher.new").exists());
 
         // 3. Valid newer version -> downloads, sets +x, swaps exe/.old, and spawns with args
         let (base, h) = serve(format!("23 {}\n", good_sha), payload.clone(), 2);
-        assert!(self_update_at(&base, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &["updated-ok".into()]));
+        assert!(self_update_at(&base, None, &exe, 22, "version-linux.txt", "GRPLauncher-linux", &["updated-ok".into()]));
         h.join().unwrap();
         assert_eq!(std::fs::read(&exe).unwrap(), payload);
         assert_eq!(std::fs::read(dir.join("GRPLauncher.old")).unwrap(), b"#!/bin/sh\necho old\n");

@@ -21,9 +21,10 @@ rsync -a --delete --exclude='/Logs/' --exclude='/BloombergReports/' --exclude='/
     case "$p" in GraphicSettings.ini|KeyMappingsPC.ini|GeneralOption.ini|Sound.ini|NewbieTips.ini) m=d;; *) m=f;; esac
     printf '%s %s %s %s\n' "$m" "$(sha256sum "$p" | cut -d' ' -f1)" "$(stat -c %s "$p")" "$p"
   done ) > "$stage/manifest.txt"
+"$(dirname "$0")/sign.sh" manifest.txt "$stage/manifest.txt"   # the launcher (24 on) asks for manifest.txt.sig
 echo "$(($(wc -l < "$stage/manifest.txt") - 1)) files, $(du -sh "$stage/files" | cut -f1)"
 if [ -n "$host" ]; then
   ssh "$host" 'mkdir -p grp/vault/files'
   rsync -a --delete --partial --info=stats1 "$stage/files/" "$host:grp/vault/files/" | tail -2
-  rsync -a "$stage/manifest.txt" "$host:grp/vault/manifest.txt"
+  rsync -a "$stage/manifest.txt" "$stage/manifest.txt.sig" "$host:grp/vault/"
 fi

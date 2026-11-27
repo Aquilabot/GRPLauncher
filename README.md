@@ -140,6 +140,16 @@ The home view shows what changed on the server, in the launcher, and in the game
 
 To add one: `research/tools/deploy/notes-add.sh <tag> "<title>" "<item>" ...` in the GRP repository prints the new file (next id, today's date); with `--publish` it uploads it.
 
+### Signed lists
+
+From version 24 the launcher believes a list from the server only with the publisher's signature next to it (`<list>.sig`, ed25519, 128 hex digits). The lists: `launcher/version.txt` and `launcher/version-linux.txt` (which launcher to become), `manifest.txt` (the game's files), `client/version.txt` and `client/d3d9.txt` (the DLLs put in the game folder), `client/ui/ui.txt` and `client/ui/ui-profile.txt` (the patches of `Yeti.big`). A hash published by the same server as the file only shows the download arrived whole; with the signature, somebody who gets into the server can hold an update back but cannot hand out a program of their own.
+
+- The signature covers the list's name and its bytes (`<name>\n<bytes>`), so a list is good only in its own place.
+- `tools/sign.sh <name> <file>` writes `<file>.sig` with the key in `~/.config/grp/sign-key.pem` (or `GRP_SIGN_KEY`). `build.sh`, `tools/make-vault.sh` and the publishing scripts of the GRP repository call it. The key lives on the machine that publishes and never on the game server; without it no launcher can be updated, so keep a copy somewhere safe.
+- The public half is `HOME_SIGN_KEY` in `core.rs` and applies to the community server. For another server, `signkey=<64 hex>` in `launcher.ini` (from `tools/sign.sh --public`); a server without one has its lists taken as they come.
+- A list without a good signature is refused: no self-update, no game files, no DLL or patch change; the game starts with what is already there when that is possible. Launchers up to 23 do not look at the signatures.
+
+
 `legacy/` holds the first launcher (WinForms, .NET), kept for reference.
 
 ---
