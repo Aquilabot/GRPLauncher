@@ -20,7 +20,7 @@ version="$(grep -oP 'pub const VERSION: u32 = \K[0-9]+' src-tauri/src/core.rs)"
 semver="$(grep -oP '^version = "\K[^"]+' src-tauri/Cargo.toml)"
 printf '%s %s\n' "$version" "$(sha256sum dist/GRPLauncher.exe | cut -d' ' -f1)" > dist/version.txt
 printf '%s %s\n' "$version" "$(sha256sum dist/GRPLauncher-linux | cut -d' ' -f1)" > dist/version-linux.txt
-# Launchers from version 24 take an update only from a version list with the publisher's signature (tools/sign.sh).
+# Launchers from version 25 take an update only from a version list with the publisher's signature (tools/sign.sh).
 tools/sign.sh launcher/version.txt dist/version.txt
 tools/sign.sh launcher/version-linux.txt dist/version-linux.txt
 ( cd dist && rm -f GRPLauncher.zip && zip -q GRPLauncher.zip GRPLauncher.exe launcher.ini LEEME.txt LICENSE )
