@@ -1,0 +1,22 @@
+[package]
+name = "grp-tunnel"
+version = "0.1.0"
+edition = "2021"
+description = "UDP tunnel between the GRP launcher and the server: the game talks to 127.0.0.1, the tunnel carries it"
+license = "MPL-2.0"
+
+# Standard library only: the launcher builds it for Windows (cargo xwin) and the server for Linux.
+[dependencies]
+
+[[bin]]
+name = "grp-tunnel-server"
+path = "src/bin/grp-tunnel-server.rs"
+
+[[bin]]
+name = "grp-tunnel-client"
+path = "src/bin/grp-tunnel-client.rs"
+
+[profile.release]
+opt-level = 2
+lto = true
+strip = true

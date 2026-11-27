@@ -1285,6 +1285,7 @@ name = "grp-launcher"
 version = "0.25.0"
 dependencies = [
  "ed25519-dalek",
+ "grp-tunnel",
  "hex",
  "pbkdf2",
  "serde",
@@ -1297,6 +1298,10 @@ dependencies = [
  "ureq",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "grp-tunnel"
+version = "0.1.0"
 
 [[package]]
 name = "gtk"
