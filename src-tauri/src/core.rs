@@ -42,6 +42,10 @@ pub struct Config {
     // Linux only: the Wine prefix the game runs in and the Proton umu-run uses.
     pub prefix: String,
     pub proton: String,
+    // The game's UDP through the tunnel (issue #34): tunnel=1 in launcher.ini, off by default until tried live.
+    pub tunnel: bool,
+    pub tunnel_port: u16,     // the server relay's UDP port on `server`
+    pub tunnel_ports: String, // the server ports the game reaches through it ("21030-21034")
 }
 
 pub fn read_pairs(file: &Path) -> HashMap<String, String> {
@@ -81,6 +85,9 @@ pub fn config() -> &'static Config {
             voice_port: get("voiceport", "0").parse().unwrap_or(0),
             prefix: get("prefix", ""),
             proton: get("proton", "GE-Proton"),
+            tunnel: get("tunnel", "0") == "1",
+            tunnel_port: get("tunnelport", "21035").parse().unwrap_or(21035),
+            tunnel_ports: get("tunnelports", "21030-21034"),
         }
     })
 }
@@ -1936,6 +1943,42 @@ fn run_elevated(exe: &Path, args: &str) -> Result<u32, u32> {
     }
 }
 
+/// The tunnel (issue #34, step 1): with tunnel=1 in launcher.ini the game is told its servers are at 127.0.0.1, where
+/// a relay of this launcher carries its UDP to the server relay on the VPS (GRPLauncher/tunnel). None when it is off
+/// or the server relay does not answer: then the game goes straight to the server, as without it.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn start_tunnel(account: &str) -> Option<grp_tunnel::client::ClientRelay> {
+    let c = config();
+    if !c.tunnel {
+        return None;
+    }
+    let ports = match grp_tunnel::parse_ports(&c.tunnel_ports) {
+        Ok(p) => p,
+        Err(e) => {
+            log(&format!("tunnel off: tunnelports={} ({})", c.tunnel_ports, e));
+            return None;
+        }
+    };
+    use std::net::ToSocketAddrs;
+    let Some(server) = (c.server.as_str(), c.tunnel_port).to_socket_addrs().ok().and_then(|mut a| a.next()) else {
+        log(&format!("tunnel off: {} does not resolve", c.server));
+        return None;
+    };
+    let mut cfg = grp_tunnel::client::ClientConfig::new(server, &ports);
+    cfg.label = account.to_string();
+    cfg.log = std::sync::Arc::new(|s: &str| log(s));
+    match grp_tunnel::client::ClientRelay::start(cfg) {
+        Ok(relay) => {
+            log(&format!("tunnel on: the game talks to 127.0.0.1, carried to {}", server));
+            Some(relay)
+        }
+        Err(e) => {
+            log(&format!("tunnel not available ({}): the game goes straight to the server", e));
+            None
+        }
+    }
+}
+
 /// Runs the game with the session already made ("<name>.<token>") and waits for it to exit.
 #[cfg(windows)]
 pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), playing: &dyn Fn()) -> Result<(), String> {
@@ -1950,11 +1993,17 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     progress(tr("Iniciando el juego...", "Launching the game..."), -1.0);
     let c = config();
     let (hist_user, hist_token) = session.split_once('.').unwrap_or((session, ""));
+    // Kept until the game exits; dropping it says goodbye to the server relay.
+    let tunnel = start_tunnel(hist_user);
+    let (sandbox, lobby_port) = match &tunnel {
+        Some(t) => ("127.0.0.1".to_string(), t.local_port(c.port).unwrap_or(c.port)),
+        None => (c.server.clone(), c.port),
+    };
     let mut cmd = std::process::Command::new(game_dir.join(GAME_EXE));
     cmd.current_dir(game_dir)
         .arg("/ForceDefaultSandbox=true")
-        .arg(format!("/Sandbox={}", c.server))
-        .arg(format!("/Port={}", c.port))
+        .arg(format!("/Sandbox={}", sandbox))
+        .arg(format!("/Port={}", lobby_port))
         .arg(format!("/OnlineAccessKey={}", c.access_key))
         .arg(format!("/language={}", c.language));
     if !hist_user.is_empty() && !hist_token.is_empty() {
@@ -1980,6 +2029,9 @@ pub fn run_game(game_dir: &Path, session: &str, progress: &dyn Fn(&str, f64), pl
     playing();
     let code = child.wait().map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     log(&format!("game exited, code {}", code));
+    if let Some(t) = tunnel {
+        t.stop();
+    }
     if dxvk {
         let text = std::fs::read(&dxvk_log).ok().map(|b| String::from_utf8_lossy(&b).into_owned());
         if let Some(why) = dxvk_failure(text.as_deref()) {
