@@ -43,6 +43,7 @@
   - Unthrottled mouse movement (removes the per-frame fast-turn cap), focal-length sensitivity scaling, and separate ADS / scope multipliers.
   - Exact mouse sensitivity input with a built-in converter from **cm/360° + DPI** or other shooters (*The Finals, CS2, Apex Legends, Valorant, Overwatch 2, Call of Duty, Fortnite, Rainbow Six Siege*).
 - **Vulkan rendering via DXVK** *(Windows, optional, enabled by default)*: runs the game through DXVK 3.1.1 after checking for Vulkan 1.3 support, with automatic fallback to DirectX 9 if your GPU or driver does not support it.
+- **Voice chat (Mumble):** *Join voice* in Settings opens your own [Mumble](https://www.mumble.info/) client on the community voice server under your nickname (channels Lobby, Team Alpha, Team Bravo); optionally it opens by itself when the game starts. If Mumble is not installed the launcher says so and links the download. `voicehost` / `voiceport` in `launcher.ini` point it at another server; by default the account service says where it is (`GET /voice`).
 - **Native Linux support:** Builds natively with Tauri 2 and launches the game through `umu-run` / Proton.
 - **Simple and private:** Per-user Windows installer (with automatic WebView2 setup and clean uninstall that keeps the game folder) or zero-registry portable `.zip`, no telemetry or ads ([`PRIVACY.md`](PRIVACY.md)), encrypted HTTPS authentication, and automatic self-updates.
 

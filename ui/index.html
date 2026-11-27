@@ -142,6 +142,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           </div>
         </fieldset>
 
+        <fieldset class="group" id="voiceGroup">
+          <legend data-i18n="set.voice">Chat de voz (Mumble)</legend>
+          <div class="item wide">
+            <p class="hint" data-i18n="set.voice.hint">La voz va por Mumble, un programa gratuito aparte. Instálalo una vez; después «Unirse a la voz» lo abre ya conectado a nuestro servidor con tu nickname.</p>
+            <div class="row">
+              <button type="button" id="voiceJoin" class="ghost" data-i18n="voice.join">Unirse a la voz</button>
+              <button type="button" id="voiceGet" class="link" data-i18n="voice.get">Descargar Mumble</button>
+            </div>
+          </div>
+          <div class="item">
+            <span class="label" data-i18n="set.voice.auto">Abrir Mumble al iniciar el juego</span>
+            <label class="check"><input id="voiceauto" type="checkbox"><span data-i18n="set.on">Activado</span></label>
+          </div>
+        </fieldset>
+
         <fieldset class="group">
           <legend data-i18n="set.mouse">Ratón</legend>
           <div class="item wide">
@@ -260,6 +275,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <p class="hint" id="createHint" data-i18n="acc.create.hint" hidden>Gratis y sin correo. Contraseña de al menos 6 caracteres.</p>
         <button type="button" id="forgot" class="link" data-i18n="acc.forgot">¿Olvidaste tu contraseña?</button>
         <button type="button" id="account" class="link" data-i18n="acc.manage">Cambiar contraseña o clave de recuperación</button>
+        <button type="button" id="voiceQuick" class="link" data-i18n="voice.join">Unirse a la voz</button>
 
         <div id="inviteRow" hidden>
           <label for="invite" data-i18n="acc.invite">Código de invitación</label>

@@ -37,6 +37,8 @@ pub struct Config {
     pub access_key: String,
     pub sign_key: String, // public key the server's lists are signed with (64 hex); see list_key
     pub language: String,
+    pub voice_host: String, // Mumble server (voice chat); empty = ask the account service (/voice), then the game server's name
+    pub voice_port: u16,    // 0 = the one the account service says, else 64738
     // Linux only: the Wine prefix the game runs in and the Proton umu-run uses.
     pub prefix: String,
     pub proton: String,
@@ -75,6 +77,8 @@ pub fn config() -> &'static Config {
             access_key: get("accesskey", "8dtRv2oj"),
             sign_key: get("signkey", ""),
             language: get("language", "english"),
+            voice_host: get("voicehost", ""),
+            voice_port: get("voiceport", "0").parse().unwrap_or(0),
             prefix: get("prefix", ""),
             proton: get("proton", "GE-Proton"),
         }
@@ -427,7 +431,7 @@ pub fn explain(answer: &str) -> String {
 
 // ---- downloads ----
 
-fn get_text(url: &str, seconds: u64) -> Result<String, String> {
+pub fn get_text(url: &str, seconds: u64) -> Result<String, String> {
     ureq::get(url).timeout(Duration::from_secs(seconds)).call().map_err(|e| e.to_string())?.into_string().map_err(|e| e.to_string())
 }
 

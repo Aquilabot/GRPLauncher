@@ -14,6 +14,11 @@ only when you use it:
 - **Showing the server's news** (since version 5): when the window opens and when the game closes it downloads
   `notes.json`, a public list of changes. The request carries nothing about you.
 
+- **Voice chat** (only when you press *Join voice*, or the game starts with *Open Mumble when the game starts* on):
+  it asks the account service where the voice server is (`GET /voice`, carries nothing about you) and then hands a
+  `mumble://<nickname>@host:port/channel` link to your own Mumble program, which connects to the voice server with your
+  nickname. The launcher itself sends no voice and no password.
+
 As with any connection, the server sees your IP address; it keeps it in its access log.
 
 What the launcher keeps on your computer: the nickname (never the password), the folder and the resolution you
