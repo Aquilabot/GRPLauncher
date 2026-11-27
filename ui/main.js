@@ -3,7 +3,7 @@
 // events and draws the two diagrams (the terrain of the home view, the view cone of the settings).
 const $ = (id) => document.getElementById(id);
 const tauri = window.__TAURI__;
-const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', sidebutton1: '', sidebutton2: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '', remember: true, keptname: '' };
+const PREVIEW = { version: 0, name: '', gamedir: 'C:\\Users\\tu\\AppData\\Local\\GRP\\Ghost Recon Phantoms', resolution: 'auto', windowed: false, mousesens: '', clientmods: true, maxfps: '', fov: '', focallength: false, adsmult: '', scopemult: '', sidebutton1: '', sidebutton2: '', dxvk: true, classbuttons: true, server: '56.127.0.17', lang: '', remember: true, keptname: '', voiceauto: false };
 // Outside the launcher (the page opened in a browser, to look at it): the state above and three notes of the real log.
 const PREVIEW_NOTES = { seen: 25, notes: [
   { id: 26, date: '2026-11-23', tag: 'servidor', title: 'Bots más naturales', items: ['Los bots se mueven más como un jugador: corren y esprintan a velocidad de jugador, trepan y caen en vez de cambiar de altura de golpe.', 'Ya no se meten dentro de los muros ni se quedan quietos cuando les disparan.'] },
@@ -77,6 +77,8 @@ const TEXT = {
     'msg.manage.need': 'Escribe tu nickname, tu contraseña actual y la nueva.', 'msg.manage.needkey': 'Escribe tu nickname y tu contraseña actual.',
     'msg.manage.busy': 'Cambiando contraseña...', 'msg.manage.done': 'Contraseña cambiada. Inicia sesión con la nueva.', 'msg.manage.keybusy': 'Creando clave...',
     'reset.code': 'Código', 'reset.new': 'Nueva contraseña', 'reset.again': 'Repite la contraseña', 'reset.go': 'Cambiar contraseña', 'reset.back': 'Volver',
+    'set.voice': 'Chat de voz (Mumble)', 'set.voice.hint': 'La voz va por Mumble, un programa gratuito aparte. Instálalo una vez; después «Unirse a la voz» lo abre ya conectado a nuestro servidor con tu nickname.', 'set.voice.auto': 'Abrir Mumble al iniciar el juego', 'voice.join': 'Unirse a la voz', 'voice.get': 'Descargar Mumble',
+    'voice.name': 'Escribe tu nickname para unirte a la voz.', 'voice.opened': 'Abriendo Mumble en {host}:{port} (canal {channel}).', 'voice.missing': 'No encuentro Mumble en este equipo. Instálalo con «Descargar Mumble» y vuelve a pulsar «Unirse a la voz».', 'voice.error': 'No se pudo abrir Mumble. Conéctate a mano: servidor {host}, puerto {port}, usuario {name}.',
     'links.label': 'Enlaces', 'links.status': 'Estado del servidor', 'links.source': 'Código fuente', 'links.support': 'Apoyar el servidor',
     'legal': 'Proyecto comunitario, sin afiliación con Ubisoft.', 'version': 'Launcher {v}',
     'msg.need': 'Escribe tu nickname y contraseña.', 'msg.short': 'La contraseña debe tener al menos 6 caracteres.', 'msg.invite': 'Escribe el código de invitación.',
@@ -124,6 +126,8 @@ const TEXT = {
     'msg.manage.need': 'Enter your nickname, current password, and new password.', 'msg.manage.needkey': 'Enter your nickname and current password.',
     'msg.manage.busy': 'Updating password...', 'msg.manage.done': 'Password changed. Sign in with the new one.', 'msg.manage.keybusy': 'Creating key...',
     'reset.code': 'Code', 'reset.new': 'New password', 'reset.again': 'Confirm new password', 'reset.go': 'Change password', 'reset.back': 'Back',
+    'set.voice': 'Voice chat (Mumble)', 'set.voice.hint': 'Voice runs on Mumble, a free separate program. Install it once; after that “Join voice” opens it already connected to our server under your nickname.', 'set.voice.auto': 'Open Mumble when the game starts', 'voice.join': 'Join voice', 'voice.get': 'Download Mumble',
+    'voice.name': 'Enter your nickname to join voice.', 'voice.opened': 'Opening Mumble on {host}:{port} (channel {channel}).', 'voice.missing': 'Mumble is not installed on this computer. Install it with “Download Mumble”, then press “Join voice” again.', 'voice.error': 'Mumble could not be opened. Connect by hand: server {host}, port {port}, username {name}.',
     'links.label': 'Links', 'links.status': 'Server status', 'links.source': 'Source code', 'links.support': 'Support the server',
     'legal': 'Community project, not affiliated with Ubisoft.', 'version': 'Launcher {v}',
     'msg.need': 'Enter your nickname and password.', 'msg.short': 'Password must be at least 6 characters.', 'msg.invite': 'Enter your invitation code.',
@@ -597,11 +601,31 @@ $('form').addEventListener('submit', async (ev) => {
 });
 
 // Links of the bottom rail: the Rust side knows the addresses and opens them in the player's browser.
-const PREVIEW_LINKS = { status: 'https://grp.limacashout.pro/status/', source: 'https://github.com/Aquilabot/GRPLauncher', support: 'https://ko-fi.com/aquilabot' };
+const PREVIEW_LINKS = { status: 'https://grp.limacashout.pro/status/', source: 'https://github.com/Aquilabot/GRPLauncher', support: 'https://ko-fi.com/aquilabot', mumble: 'https://www.mumble.info/downloads/' };
 for (const b of document.querySelectorAll('.ext')) b.addEventListener('click', () => {
   if (tauri) invoke('open_link', { which: b.dataset.url }).catch(() => {});
   else window.open(PREVIEW_LINKS[b.dataset.url], '_blank', 'noopener');
 });
+
+// Voice chat (Mumble): the Rust side asks the server where it is, checks that a Mumble is installed and opens it.
+function voiceMessage(r, name) {
+  if (r.status === 'opened') return setStatus(t('voice.opened', r), -1);
+  setStatus(t(r.status === 'missing' ? 'voice.missing' : 'voice.error', { ...r, name }), -1, 'fault');
+}
+async function joinVoice() {
+  const name = $('name').value.trim();
+  if (!name) return setStatus(t('voice.name'), -1, 'fault');
+  const r = await invoke('join_voice', { name }).catch(() => null);
+  if (r) voiceMessage(r, name);
+  else if (!tauri) setStatus(t('voice.opened', { host: 'grp.limacashout.pro', port: 64738, channel: 'Lobby' }), -1);
+}
+$('voiceJoin').addEventListener('click', joinVoice);
+$('voiceQuick').addEventListener('click', joinVoice);
+$('voiceGet').addEventListener('click', () => {
+  if (tauri) invoke('open_link', { which: 'mumble' }).catch(() => {});
+  else window.open(PREVIEW_LINKS.mumble, '_blank', 'noopener');
+});
+$('voiceauto').addEventListener('change', () => invoke('set_voice_auto', { on: $('voiceauto').checked }).catch(() => {}));
 
 // Release notes from the server, newest first. Their text goes in as text, never as HTML. Entries newer than the
 // last one the player saw get a mark; touching the list or pressing Play counts as seen (the marks stay until the
@@ -877,6 +901,7 @@ $('form').addEventListener('submit', markNotesSeen);
 
 listen('status', (e) => setStatus(e.payload.text, e.payload.fraction));
 listen('recovery', (e) => showRecovery(e.payload));
+listen('voice', (e) => voiceMessage(e.payload, $('name').value.trim())); // Mumble opened by the game's start
 listen('playing', () => {
   if (!$('recoveryBox').hidden) { minimizeWhenSaved = true; return; }   // the key first
   if (tauri) tauri.window.getCurrentWindow().minimize();
@@ -921,6 +946,7 @@ listen('done', (e) => {
   showDxvk(s.dxvk);
   $('dxvk').disabled = LINUX;
   $('classbuttons').checked = s.classbuttons !== false;
+  $('voiceauto').checked = !!s.voiceauto;
   $('remember').checked = s.remember !== false;
   keptName = s.keptname || '';
   // The language the player chose; the first time, English for a system in English and Spanish for the rest.

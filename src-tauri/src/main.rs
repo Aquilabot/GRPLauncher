@@ -10,7 +10,8 @@
 //   GRPLauncher.exe --session <name>.<token> --gamedir <folder>     only answer the game and run it (Linux, inside Wine)
 //   GRPLauncher.exe --vulkan-check                    prints "ok <device>" or "no <why>": can DXVK run here (Windows)
 //
-// Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language.
+// Settings next to the program, launcher.ini: server, accounthost, accountport, port, accesskey, language,
+// voicehost, voiceport (the Mumble server, `voice.rs`; by default the account service says).
 // What the player chose last (never the password), the window's language ("lang": es or en) and the last release note
 // seen: %APPDATA%\GRPLauncher\settings.txt;
 // log: launcher.log there.
@@ -19,6 +20,7 @@
 mod core;
 mod notes;
 mod pipe;
+mod voice;
 
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
@@ -45,6 +47,7 @@ struct State {
     lang: String,       // "es", "en", or empty the first time: the window picks by the system's language
     remember: bool,     // "Mantener la sesión iniciada" (on unless the player turned it off)
     keptname: String,   // the account this launcher keeps signed in; empty: none
+    voiceauto: bool,    // open Mumble when the game starts (off until the player turns it on)
 }
 
 struct SavedClientMods {
@@ -106,6 +109,7 @@ fn get_state() -> State {
         lang: s.get("lang").cloned().unwrap_or_default(),
         remember: s.get("remember").map(|v| v != "0").unwrap_or(true),
         keptname: core::kept_name().unwrap_or_default(),
+        voiceauto: s.get("voiceauto").map(|v| v == "1").unwrap_or(false),
     }
 }
 
@@ -124,6 +128,7 @@ fn open_link(which: String) {
         "status" => "https://grp.limacashout.pro/status/",
         "source" => "https://github.com/Aquilabot/GRPLauncher",
         "support" => "https://ko-fi.com/aquilabot",
+        "mumble" => "https://www.mumble.info/downloads/",
         _ => return,
     };
     #[cfg(windows)]
@@ -133,6 +138,19 @@ fn open_link(which: String) {
     if let Err(e) = r {
         core::log(&format!("link {} not opened: {}", which, e));
     }
+}
+
+/// "Unirse a la voz": opens the player's Mumble on the community server, signed in with the account's name. Off the
+/// window's thread: it asks the account service where the server is.
+#[tauri::command(async)]
+fn join_voice(name: String) -> voice::Joined {
+    voice::join(&name)
+}
+
+/// "Abrir Mumble al iniciar el juego", kept as soon as it changes.
+#[tauri::command]
+fn set_voice_auto(on: bool) {
+    core::save_settings(&[("voiceauto", if on { "1" } else { "0" }.to_string())]);
 }
 
 #[derive(Deserialize)]
@@ -231,8 +249,17 @@ fn play(app: tauri::AppHandle, args: PlayArgs) {
             let client = core::client_mods(args.clientmods, &args.maxfps, &args.fov, args.focallength, &args.adsmult, &args.scopemult, [&args.sidebutton1, &args.sidebutton2]);
             let mouse_sens = core::parse_mouse_sens(&args.mousesens);
             let opts = core::PlayOptions { sync: true, width: args.width, height: args.height, windowed: args.windowed, mouse_sens, client, dxvk: args.dxvk, class_buttons: args.classbuttons, run: true };
+            let voice_name = args.name.clone();
+            let voice_auto = core::settings().get("voiceauto").map(|v| v == "1").unwrap_or(false);
             error = core::play(&args.name, &args.password, args.remember, std::path::Path::new(&args.gamedir), &opts, &progress, &move || {
                 let _ = playing_app.emit("playing", ());
+                if voice_auto {
+                    // the game is up: Mumble next to it, off this thread because it asks the server where to join
+                    let (app, name) = (playing_app.clone(), voice_name.clone());
+                    std::thread::spawn(move || {
+                        let _ = app.emit("voice", voice::join(&name));
+                    });
+                }
             })
             .err();
         }
@@ -519,7 +546,7 @@ fn main() {
     }
     if let Err(e) = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, sign_out, play, pick_folder, reset_password, change_password, new_recovery_key])
+        .invoke_handler(tauri::generate_handler![get_state, set_lang, open_link, get_notes, mark_notes_seen, get_history, sign_out, join_voice, set_voice_auto, play, pick_folder, reset_password, change_password, new_recovery_key])
         .run(tauri::generate_context!())
     {
         let msg = e.to_string();
